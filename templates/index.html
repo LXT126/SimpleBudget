@@ -43,7 +43,7 @@
         <tr>
             <td>{{ transaction.date }}</td>
             <td>{{ transaction.category }}</td>
-            <td>{{ transaction.amount }}</td>
+            <td>{{ "%.2f"|format(transaction.amount|float) }}</td>
             <td>{{ transaction.type }}</td>
             <td>
                 <button onclick="showTransactionDialog({{ transaction.id }}, '{{ transaction.date }}', '{{ transaction.category }}', {{ transaction.amount }}, '{{ transaction.type }}')">View</button>
