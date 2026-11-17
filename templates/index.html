@@ -31,6 +31,25 @@
 </head>
 <body>
     <h1>Personal Finance Manager</h1>
+    <form method="get" action="{{ url_for('index') }}">
+    <label for="month">Month:</label>
+    <input
+        type="month"
+        id="month"
+        name="month"
+        value="{{ selected_month }}"
+        min="0001-01"
+        max="9999-12"
+        required
+    >
+    <button type="submit">Show transactions</button>
+</form>
+
+{% if error %}
+<p role="alert">{{ error }}</p>
+{% elif not transactions %}
+<p>No transactions for {{ selected_month }}.</p>
+{% endif %}
     <table border="1">
         <tr>
             <th>Date</th>

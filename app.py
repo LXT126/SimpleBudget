@@ -1,5 +1,7 @@
 from flask import Flask, render_template, request, redirect, url_for
 import sqlite3
+import re
+from datetime import date
 
 app = Flask(__name__)
 
@@ -11,10 +13,37 @@ def get_db_connection():
 
 @app.route('/')
 def index():
-    conn = get_db_connection()
-    transactions = conn.execute('SELECT * FROM transactions').fetchall()
-    conn.close()
-    return render_template('index.html', transactions=transactions)
+    selected_month = request.args.get(
+        'month', date.today().strftime('%Y-%m')
+    )
+    error = None
+
+    valid_month = re.fullmatch(
+        r'[0-9]{4}-(0[1-9]|1[0-2])', selected_month
+    )
+
+    if valid_month and int(selected_month[:4]) >= 1:
+        conn = get_db_connection()
+        try:
+            transactions = conn.execute(
+                """SELECT * FROM transactions
+                   WHERE substr(date, 1, 7) = ?
+                   ORDER BY date, id""",
+                (selected_month,)
+            ).fetchall()
+        finally:
+            conn.close()
+    else:
+        error = 'Invalid month. Use YYYY-MM with a year from 0001 to 9999.'
+        selected_month = ''
+        transactions = []
+
+    return render_template(
+        'index.html',
+        transactions=transactions,
+        selected_month=selected_month,
+        error=error
+    ), 400 if error else 200
 
 @app.route('/add', methods=('GET', 'POST'))
 def add():
