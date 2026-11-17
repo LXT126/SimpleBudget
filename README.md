@@ -205,3 +205,27 @@ Tests use temporary SQLite databases and cover expense-only totals,
 month/year isolation, empty months, unset and zero budgets, exact-budget
 and overspending cases, decimal amounts, and recalculation after
 transaction and budget changes.
+
+## Transaction input validation — Issue #9
+
+Adding and editing transactions use shared server-side validation.
+Dates must be valid calendar dates in YYYY-MM-DD format.
+Categories must not be empty after trimming whitespace.
+Amounts must be positive, with at most two decimal places.
+Non-numeric amounts, NaN, Infinity, and scientific notation are rejected.
+Transaction type must be expense or income.
+
+Invalid submissions return HTTP 400, display clear errors, and preserve
+entered values without inserting or changing stored transactions.
+Editing a missing transaction returns HTTP 404.
+
+Run all four test modules:
+
+```bash
+python -m unittest -v test_month_selection test_monthly_budget test_monthly_summary test_transaction_validation
+```
+
+Validation tests use a temporary SQLite database and cover valid adds
+and edits, invalid and missing fields, unchanged stored data after
+rejection, input retention, whitespace trimming, amount normalization,
+leap dates, form loading, and missing transactions.

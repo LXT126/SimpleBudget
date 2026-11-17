@@ -1,8 +1,9 @@
 from flask import Flask, render_template, request, redirect, url_for
 import sqlite3
-import re
 from datetime import date
+
 from monthly_summary import calculate_monthly_summary
+from transaction_validation import validate_transaction
 from monthly_budget import (
     validate_month,
     get_monthly_budget,
@@ -11,11 +12,12 @@ from monthly_budget import (
 
 app = Flask(__name__)
 
-# Database connection
+
 def get_db_connection():
     conn = sqlite3.connect('finance.db')
     conn.row_factory = sqlite3.Row
     return conn
+
 
 @app.route('/', methods=('GET', 'POST'))
 def index():
@@ -55,7 +57,9 @@ def index():
                     budget_error = str(exc)
                     status = 400
                 except sqlite3.Error:
-                    budget_error = 'Budget could not be saved. Please try again.'
+                    budget_error = (
+                        'Budget could not be saved. Please try again.'
+                    )
                     status = 503
                 else:
                     return redirect(
@@ -64,7 +68,9 @@ def index():
         finally:
             conn.close()
     else:
-        error = 'Invalid month. Use YYYY-MM with a year from 0001 to 9999.'
+        error = (
+            'Invalid month. Use YYYY-MM with a year from 0001 to 9999.'
+        )
         selected_month = ''
         status = 400
 
@@ -83,50 +89,117 @@ def index():
         )
     ), status
 
+
 @app.route('/add', methods=('GET', 'POST'))
 def add():
+    values = {
+        "date": "",
+        "category": "Groceries",
+        "amount": "",
+        "type": "expense",
+    }
+    errors = {}
+
     if request.method == 'POST':
-        date = request.form['date']
-        category = request.form['category']
-        amount = request.form['amount']
-        type = request.form['type']  # 'expense' or 'income'
+        values, cleaned, errors = validate_transaction(request.form)
+
+        if errors:
+            return render_template(
+                'add.html',
+                values=values,
+                errors=errors,
+            ), 400
 
         conn = get_db_connection()
-        conn.execute('INSERT INTO transactions (date, category, amount, type) VALUES (?, ?, ?, ?)',
-                     (date, category, amount, type))
-        conn.commit()
-        conn.close()
+        try:
+            with conn:
+                conn.execute(
+                    """INSERT INTO transactions
+                       (date, category, amount, type)
+                       VALUES (?, ?, ?, ?)""",
+                    (
+                        cleaned["date"],
+                        cleaned["category"],
+                        cleaned["amount"],
+                        cleaned["type"],
+                    ),
+                )
+        finally:
+            conn.close()
+
         return redirect('/')
 
-    return render_template('add.html')
+    return render_template(
+        'add.html',
+        values=values,
+        errors=errors,
+    )
+
 
 @app.route('/delete/<int:id>', methods=('POST',))
 def delete(id):
     conn = get_db_connection()
-    conn.execute('DELETE FROM transactions WHERE id = ?', (id,))
+    conn.execute(
+        'DELETE FROM transactions WHERE id = ?', (id,)
+    )
     conn.commit()
     conn.close()
     return redirect('/')
 
+
 @app.route('/edit/<int:id>', methods=('GET', 'POST'))
 def edit(id):
     conn = get_db_connection()
-    transaction = conn.execute('SELECT * FROM transactions WHERE id = ?', (id,)).fetchone()
+    try:
+        transaction = conn.execute(
+            'SELECT * FROM transactions WHERE id = ?', (id,)
+        ).fetchone()
 
-    if request.method == 'POST':
-        date = request.form['date']
-        category = request.form['category']
-        amount = request.form['amount']
-        type = request.form['type']
+        if transaction is None:
+            return "Transaction not found.", 404
 
-        conn.execute('UPDATE transactions SET date = ?, category = ?, amount = ?, type = ? WHERE id = ?',
-                     (date, category, amount, type, id))
-        conn.commit()
+        values = {
+            field: str(transaction[field])
+            for field in ("date", "category", "amount", "type")
+        }
+        errors = {}
+
+        if request.method == 'POST':
+            values, cleaned, errors = validate_transaction(request.form)
+
+            if errors:
+                return render_template(
+                    'edit.html',
+                    transaction=transaction,
+                    values=values,
+                    errors=errors,
+                ), 400
+
+            with conn:
+                conn.execute(
+                    """UPDATE transactions
+                       SET date = ?, category = ?, amount = ?, type = ?
+                       WHERE id = ?""",
+                    (
+                        cleaned["date"],
+                        cleaned["category"],
+                        cleaned["amount"],
+                        cleaned["type"],
+                        id,
+                    ),
+                )
+
+            return redirect('/')
+
+        return render_template(
+            'edit.html',
+            transaction=transaction,
+            values=values,
+            errors=errors,
+        )
+    finally:
         conn.close()
-        return redirect('/')
 
-    conn.close()
-    return render_template('edit.html', transaction=transaction)
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=5000)

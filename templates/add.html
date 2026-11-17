@@ -7,28 +7,77 @@
 </head>
 <body>
     <h1>Add Transaction</h1>
-    <form action="/add" method="post">
-        <label for="date">Date:</label>
-        <input type="date" name="date" id="date" required><br>
+
+    {% if errors %}
+    <div role="alert" style="color: #b00020;">
+        <p>Please correct the following errors:</p>
+        <ul>
+            {% for message in errors.values() %}
+            <li>{{ message }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <form action="{{ url_for('add') }}" method="post">
+        <label for="date">Date (YYYY-MM-DD):</label>
+        <input
+            type="text"
+            name="date"
+            id="date"
+            placeholder="2026-11-18"
+            value="{{ values.date }}"
+            required
+        ><br>
 
         <label for="category">Category:</label>
-        <select name="category" id="category">
-            <option value="Groceries">Groceries</option>
-            <option value="Utilities">Utilities</option>
-            <option value="Rent">Rent</option>
-            <option value="Salary">Salary</option>
-            <option value="Misc">Misc</option>
+        {% set categories = ['Groceries', 'Utilities', 'Rent', 'Salary', 'Misc'] %}
+        <select name="category" id="category" required>
+            {% if values.category not in categories %}
+            <option value="{{ values.category }}" selected>
+                {{ values.category if values.category else 'Choose a category' }}
+            </option>
+            {% endif %}
+            {% for category in categories %}
+            <option value="{{ category }}"
+                {% if values.category == category %}selected{% endif %}>
+                {{ category }}
+            </option>
+            {% endfor %}
         </select><br>
 
-        <label for="amount">Amount:</label>
-        <input type="number" name="amount" id="amount" step="0.01" required><br>
+        <label for="amount">Amount (CNY):</label>
+        <input
+            type="text"
+            name="amount"
+            id="amount"
+            inputmode="decimal"
+            placeholder="12.50"
+            value="{{ values.amount }}"
+            required
+        >
+        <small>Greater than zero, with at most two decimal places.</small><br>
 
-        <label>Type:</label>
-        <input type="radio" name="type" value="expense" checked> Expense
-        <input type="radio" name="type" value="income"> Income<br>
+        <label for="type">Type:</label>
+        <select name="type" id="type" required>
+            {% if values.type not in ['expense', 'income'] %}
+            <option value="{{ values.type }}" selected>
+                {{ values.type if values.type else 'Choose a type' }}
+            </option>
+            {% endif %}
+            <option value="expense"
+                {% if values.type == 'expense' %}selected{% endif %}>
+                Expense
+            </option>
+            <option value="income"
+                {% if values.type == 'income' %}selected{% endif %}>
+                Income
+            </option>
+        </select><br>
 
-        <input type="submit" value="Add Transaction">
+        <button type="submit">Add Transaction</button>
     </form>
-    <a href="/">Back to Home</a>
+
+    <a href="{{ url_for('index') }}">Back to Home</a>
 </body>
 </html>
