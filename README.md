@@ -162,3 +162,23 @@ python -m unittest -v test_month_selection
 The seven tests cover month boundaries, year isolation, empty months,
 selection retention, the current-month default, invalid parameters,
 and unchanged database contents. Tests use a temporary SQLite database.
+
+## Monthly budgets — Issue #5
+
+Select a month, enter a non-negative budget with at most two decimal
+places, and click "Save budget". Budgets are stored separately by year
+and month and displayed in CNY with two decimal places.
+An unset budget is distinguished from 0.00.
+
+The monthly_budgets table is created automatically in finance.db.
+Saved budgets persist across application restarts.
+
+Run the month-selection and monthly-budget tests:
+
+```bash
+python -m unittest -v test_month_selection test_monthly_budget
+```
+
+Tests use temporary SQLite databases and cover saving, updating,
+month/year isolation, zero and unset budgets, invalid input,
+persistence after reopening the database, and rollback on save failure.
