@@ -2,6 +2,11 @@ from flask import Flask, render_template, request, redirect, url_for
 import sqlite3
 import re
 from datetime import date
+from monthly_budget import (
+    validate_month,
+    get_monthly_budget,
+    save_monthly_budget,
+)
 
 app = Flask(__name__)
 
@@ -11,18 +16,22 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
-@app.route('/')
+@app.route('/', methods=('GET', 'POST'))
 def index():
-    selected_month = request.args.get(
-        'month', date.today().strftime('%Y-%m')
-    )
+    if request.method == 'POST':
+        selected_month = request.form.get('month', '')
+    else:
+        selected_month = request.args.get(
+            'month', date.today().strftime('%Y-%m')
+        )
+
     error = None
+    budget_error = None
+    monthly_budget = None
+    transactions = []
+    status = 200
 
-    valid_month = re.fullmatch(
-        r'[0-9]{4}-(0[1-9]|1[0-2])', selected_month
-    )
-
-    if valid_month and int(selected_month[:4]) >= 1:
+    if validate_month(selected_month):
         conn = get_db_connection()
         try:
             transactions = conn.execute(
@@ -31,19 +40,44 @@ def index():
                    ORDER BY date, id""",
                 (selected_month,)
             ).fetchall()
+
+            monthly_budget = get_monthly_budget(conn, selected_month)
+
+            if request.method == 'POST':
+                try:
+                    save_monthly_budget(
+                        conn,
+                        selected_month,
+                        request.form.get('budget', '')
+                    )
+                except ValueError as exc:
+                    budget_error = str(exc)
+                    status = 400
+                except sqlite3.Error:
+                    budget_error = 'Budget could not be saved. Please try again.'
+                    status = 503
+                else:
+                    return redirect(
+                        url_for('index', month=selected_month)
+                    )
         finally:
             conn.close()
     else:
         error = 'Invalid month. Use YYYY-MM with a year from 0001 to 9999.'
         selected_month = ''
-        transactions = []
+        status = 400
 
     return render_template(
         'index.html',
         transactions=transactions,
         selected_month=selected_month,
-        error=error
-    ), 400 if error else 200
+        error=error,
+        budget_error=budget_error,
+        monthly_budget=(
+            None if monthly_budget is None
+            else format(monthly_budget, '.2f')
+        )
+    ), status
 
 @app.route('/add', methods=('GET', 'POST'))
 def add():
