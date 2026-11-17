@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for
 import sqlite3
 import re
 from datetime import date
+from monthly_summary import calculate_monthly_summary
 from monthly_budget import (
     validate_month,
     get_monthly_budget,
@@ -67,12 +68,15 @@ def index():
         selected_month = ''
         status = 400
 
+    summary = calculate_monthly_summary(transactions, monthly_budget)
+
     return render_template(
         'index.html',
         transactions=transactions,
         selected_month=selected_month,
         error=error,
         budget_error=budget_error,
+        summary=summary,
         monthly_budget=(
             None if monthly_budget is None
             else format(monthly_budget, '.2f')

@@ -182,3 +182,26 @@ python -m unittest -v test_month_selection test_monthly_budget
 Tests use temporary SQLite databases and cover saving, updating,
 month/year isolation, zero and unset budgets, invalid input,
 persistence after reopening the database, and rollback on save failure.
+
+## Monthly spending summary — Issue #7
+
+The selected month's summary shows total expenses, excluding income.
+When a monthly budget is set, remaining budget equals budget minus expenses.
+Overspending displays a negative remaining budget and a clear alert.
+Spending exactly the budget does not trigger an alert.
+
+An unset budget is distinguished from a budget of 0.00.
+Months without expenses show CNY 0.00. All amounts use two decimal places.
+The summary is recalculated when the page loads, reflecting saved changes
+to transactions and budgets.
+
+Run the regression and monthly-summary tests:
+
+```bash
+python -m unittest -v test_month_selection test_monthly_budget test_monthly_summary
+```
+
+Tests use temporary SQLite databases and cover expense-only totals,
+month/year isolation, empty months, unset and zero budgets, exact-budget
+and overspending cases, decimal amounts, and recalculation after
+transaction and budget changes.
