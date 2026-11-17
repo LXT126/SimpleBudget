@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>User management — SimpleBudget</title>
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    {% include 'account_header.html' %}
+
+    <main class="container">
+        <div class="page-heading">
+            <div>
+                <h1>User management</h1>
+                <p class="subtitle">
+                    An overview of registered accounts.
+                </p>
+            </div>
+            <span class="month-tag">Administrator</span>
+        </div>
+
+        <div class="summary-grid">
+            <article class="summary-card">
+                <h2 class="card-label">Total accounts</h2>
+                <p class="card-value">{{ users|length }}</p>
+                <p class="card-detail">All registered accounts</p>
+            </article>
+
+            <article class="summary-card remaining">
+                <h2 class="card-label">Users</h2>
+                <p class="card-value">{{ regular_count }}</p>
+                <p class="card-detail">Personal finance accounts</p>
+            </article>
+
+            <article class="summary-card">
+                <h2 class="card-label">Administrators</h2>
+                <p class="card-value">{{ admin_count }}</p>
+                <p class="card-detail">Management accounts</p>
+            </article>
+        </div>
+
+        <section class="panel table-panel"
+                 aria-labelledby="users-heading">
+            <div class="table-heading">
+                <h2 id="users-heading">Registered users</h2>
+                <p class="muted">
+                    Most recently registered accounts appear first.
+                    Times are shown in Beijing time (UTC+08:00).
+                </p>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">User ID</th>
+                        <th scope="col">Username</th>
+                        <th scope="col">Registration time (UTC+08:00)</th>
+                        <th scope="col">Role</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for user in users %}
+                    <tr>
+                        <td>{{ user.id }}</td>
+                        <td>{{ user.username }}</td>
+                        <td>
+                            <time class="registration-time"
+                                  datetime="{{ user.registered_at }}">
+                                {{ user.registered_at }}
+                            </time>
+                        </td>
+                        <td>
+                            <span class="month-tag">{{ user.role }}</span>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+    </main>
+
+    <script>
+        const registrationFormatter = new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Asia/Shanghai",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            hourCycle: "h23"
+        });
+
+        document.querySelectorAll(".registration-time").forEach((element) => {
+            const registeredAt = new Date(element.dateTime);
+
+            if (Number.isNaN(registeredAt.getTime())) {
+                return;
+            }
+
+            const parts = Object.fromEntries(
+                registrationFormatter.formatToParts(registeredAt)
+                    .map((part) => [part.type, part.value])
+            );
+
+            element.textContent =
+                `${parts.year}-${parts.month}-${parts.day} ` +
+                `${parts.hour}:${parts.minute}`;
+        });
+    </script>
+</body>
+</html>

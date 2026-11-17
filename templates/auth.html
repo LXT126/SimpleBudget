@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ 'Register' if registering else 'Log in' }} — SimpleBudget</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+    <style>
+        .auth-container {
+            max-width: 580px;
+            padding-top: 52px;
+        }
+
+        .auth-container .page-heading {
+            margin-bottom: 26px;
+        }
+
+        .auth-container .form-panel {
+            padding: 34px;
+        }
+
+        .auth-form {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .auth-form .form-field {
+            margin: 0;
+        }
+
+        .auth-form .form-field label {
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .auth-form .form-field input {
+            width: 100%;
+            min-height: 46px;
+        }
+
+        .auth-form .form-field small {
+            display: block;
+            margin-top: 8px;
+            line-height: 1.5;
+        }
+
+        .auth-form .auth-submit {
+            width: 100%;
+            min-height: 46px;
+            margin: 6px 0 0;
+        }
+
+        .auth-footer {
+            margin: 28px 0 0;
+            padding-top: 22px;
+            border-top: 1px solid var(--border);
+            text-align: center;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .auth-footer a {
+            display: inline-block;
+            margin-left: 6px;
+            font-weight: 600;
+        }
+
+        .success-message {
+            padding: 14px 18px;
+            margin-bottom: 24px;
+            border: 1px solid #bde5d4;
+            border-radius: 10px;
+            background: #edf9f3;
+            color: #187452;
+        }
+    </style>
+</head>
+<body>
+    {% include 'account_header.html' %}
+
+    <main class="container auth-container">
+        <div class="page-heading">
+            <div>
+                <h1>
+                    {{ 'Create your account' if registering else 'Welcome back' }}
+                </h1>
+                <p class="subtitle">
+                    {{ 'Start organising your personal finances.'
+                       if registering
+                       else 'Log in to your SimpleBudget account.' }}
+                </p>
+            </div>
+        </div>
+
+        <section class="panel form-panel">
+            {% if error %}
+            <p class="alert" role="alert">{{ error }}</p>
+            {% endif %}
+
+            {% if not registering and request.args.get('registered') == '1' %}
+            <p class="success-message" role="status">
+                Account created. You can now log in.
+            </p>
+            {% endif %}
+
+            <form class="auth-form"
+                  method="post"
+                  action="{{ url_for('register' if registering else 'login') }}">
+                <input type="hidden"
+                       name="csrf_token"
+                       value="{{ csrf_token() }}">
+
+                <div class="form-field">
+                    <label for="username">Username</label>
+                    <input id="username"
+                           name="username"
+                           value="{{ username }}"
+                           autocomplete="username"
+                           minlength="3"
+                           maxlength="40"
+                           required>
+
+                    {% if registering %}
+                    <small>
+                        3–40 letters, numbers, dots, underscores or hyphens.
+                    </small>
+                    {% endif %}
+                </div>
+
+                <div class="form-field">
+                    <label for="password">Password</label>
+                    <input type="password"
+                           id="password"
+                           name="password"
+                           autocomplete="{{ 'new-password' if registering else 'current-password' }}"
+                           {% if registering %}minlength="8" maxlength="128"{% endif %}
+                           required>
+
+                    {% if registering %}
+                    <small>Use 8–128 characters.</small>
+                    {% endif %}
+                </div>
+
+                {% if registering %}
+                <div class="form-field">
+                    <label for="confirm_password">Confirm password</label>
+                    <input type="password"
+                           id="confirm_password"
+                           name="confirm_password"
+                           autocomplete="new-password"
+                           minlength="8"
+                           maxlength="128"
+                           required>
+                </div>
+                {% endif %}
+
+                <button class="auth-submit" type="submit">
+                    {{ 'Create account' if registering else 'Log in' }}
+                </button>
+            </form>
+
+            <p class="auth-footer">
+                {% if registering %}
+                Already have an account?
+                <a href="{{ url_for('login') }}">Log in</a>
+                {% else %}
+                New to SimpleBudget?
+                <a href="{{ url_for('register') }}">Create an account</a>
+                {% endif %}
+            </p>
+        </section>
+    </main>
+</body>
+</html>

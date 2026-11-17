@@ -1,3 +1,4 @@
+from test_support import AccountTestCase
 import sqlite3
 import tempfile
 import unittest
@@ -6,46 +7,21 @@ from pathlib import Path
 from unittest.mock import patch
 
 import app as application
-from monthly_budget import get_monthly_budget, save_monthly_budget
 
 
-class MonthlyBudgetTests(unittest.TestCase):
+class MonthlyBudgetTests(AccountTestCase):
     def setUp(self):
-        temp_dir = tempfile.TemporaryDirectory()
-        self.addCleanup(temp_dir.cleanup)
-        self.db_path = Path(temp_dir.name) / "test.db"
+        super().setUp()
 
-        with closing(self.connect()) as conn, conn:
-            conn.execute(
-                """CREATE TABLE transactions (
-                       id INTEGER PRIMARY KEY,
-                       date TEXT,
-                       category TEXT,
-                       amount REAL,
-                       type TEXT
-                   )"""
-            )
-
-        connection_patch = patch.object(
-            application, "get_db_connection", self.connect
-        )
-        connection_patch.start()
-        self.addCleanup(connection_patch.stop)
-        self.client = application.app.test_client()
-
-    def connect(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
 
     def save(self, month="2026-11", amount="1200.50"):
-        return self.client.post(
+        return self.post(
             "/", data={"month": month, "budget": amount}
         )
 
     def read(self, month="2026-11"):
         with closing(self.connect()) as conn:
-            result = get_monthly_budget(conn, month)
+            result = application.read_budget(conn, self.user_id, month)
         return None if result is None else format(result, ".2f")
 
     def test_save_and_display(self):
@@ -64,7 +40,7 @@ class MonthlyBudgetTests(unittest.TestCase):
         self.assertEqual(self.read(), "250.75")
         with closing(self.connect()) as conn:
             count = conn.execute(
-                "SELECT COUNT(*) FROM monthly_budgets"
+                "SELECT COUNT(*) FROM account_monthly_budgets"
             ).fetchone()[0]
         self.assertEqual(count, 1)
 
@@ -110,7 +86,7 @@ class MonthlyBudgetTests(unittest.TestCase):
 
     def test_persistence_after_reopening_database(self):
         with closing(self.connect()) as conn:
-            save_monthly_budget(conn, "2026-11", "123.45")
+            application.save_budget(conn, self.user_id, "2026-11", "123.45")
         # A new connection reads the committed value from disk.
         self.assertEqual(self.read(), "123.45")
 
@@ -119,7 +95,7 @@ class MonthlyBudgetTests(unittest.TestCase):
         with closing(self.connect()) as conn, conn:
             conn.execute(
                 """CREATE TRIGGER reject_budget_update
-                   BEFORE UPDATE ON monthly_budgets
+                   BEFORE UPDATE ON account_monthly_budgets
                    BEGIN
                        SELECT RAISE(ABORT, 'Simulated save failure');
                    END"""

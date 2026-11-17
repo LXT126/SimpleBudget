@@ -1,3 +1,4 @@
+from test_support import AccountTestCase
 import sqlite3
 import tempfile
 import unittest
@@ -9,40 +10,13 @@ import app as application
 from transaction_validation import validate_transaction
 
 
-class TransactionValidationTests(unittest.TestCase):
+class TransactionValidationTests(AccountTestCase):
     def setUp(self):
-        temp_dir = tempfile.TemporaryDirectory()
-        self.addCleanup(temp_dir.cleanup)
-        self.db_path = Path(temp_dir.name) / "test.db"
-
-        with closing(self.connect()) as conn, conn:
-            conn.execute(
-                """CREATE TABLE transactions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    date TEXT NOT NULL,
-                    category TEXT NOT NULL,
-                    amount REAL NOT NULL,
-                    type TEXT NOT NULL
-                )"""
-            )
-            cursor = conn.execute(
-                """INSERT INTO transactions (date, category, amount, type)
-                   VALUES (?, ?, ?, ?)""",
-                ("2026-11-18", "Groceries", "25.50", "expense"),
-            )
-            self.transaction_id = cursor.lastrowid
-
-        connection_patch = patch.object(
-            application, "get_db_connection", self.connect
+        super().setUp()
+        self.transaction_id = self.insert_transaction(
+            "2026-11-18", "Groceries", "25.50", "expense"
         )
-        connection_patch.start()
-        self.addCleanup(connection_patch.stop)
-        self.client = application.app.test_client()
 
-    def connect(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
 
     def valid_data(self, **changes):
         data = {
@@ -59,7 +33,7 @@ class TransactionValidationTests(unittest.TestCase):
             return [
                 dict(row)
                 for row in conn.execute(
-                    "SELECT * FROM transactions ORDER BY id"
+                    "SELECT * FROM account_transactions ORDER BY id"
                 ).fetchall()
             ]
 
@@ -70,7 +44,7 @@ class TransactionValidationTests(unittest.TestCase):
             f"/edit/{self.transaction_id}",
         ):
             with self.subTest(endpoint=endpoint, data=data):
-                response = self.client.post(endpoint, data=data)
+                response = self.post(endpoint, data=data)
                 self.assertEqual(response.status_code, 400)
                 self.assertIn(
                     message, response.get_data(as_text=True)
@@ -78,7 +52,7 @@ class TransactionValidationTests(unittest.TestCase):
                 self.assertEqual(self.rows(), before)
 
     def test_valid_add(self):
-        response = self.client.post("/add", data=self.valid_data())
+        response = self.post("/add", data=self.valid_data())
         self.assertEqual(response.status_code, 302)
         rows = self.rows()
         self.assertEqual(len(rows), 2)
@@ -86,7 +60,7 @@ class TransactionValidationTests(unittest.TestCase):
         self.assertEqual(rows[-1]["type"], "expense")
 
     def test_valid_edit(self):
-        response = self.client.post(
+        response = self.post(
             f"/edit/{self.transaction_id}",
             data=self.valid_data(
                 date="2026-12-01",
@@ -121,7 +95,7 @@ class TransactionValidationTests(unittest.TestCase):
                 )
 
     def test_valid_leap_day(self):
-        response = self.client.post(
+        response = self.post(
             "/add",
             data=self.valid_data(date="2024-02-29"),
         )
@@ -185,7 +159,7 @@ class TransactionValidationTests(unittest.TestCase):
             f"/edit/{self.transaction_id}",
         ):
             with self.subTest(endpoint=endpoint):
-                response = self.client.post(endpoint, data=data)
+                response = self.post(endpoint, data=data)
                 self.assertEqual(response.status_code, 400)
                 page = response.get_data(as_text=True)
                 self.assertIn('value="2026-02-30"', page)
@@ -198,7 +172,7 @@ class TransactionValidationTests(unittest.TestCase):
                 )
 
     def test_whitespace_is_trimmed(self):
-        response = self.client.post(
+        response = self.post(
             "/add",
             data=self.valid_data(
                 date=" 2026-11-18 ",
@@ -228,6 +202,11 @@ class TransactionValidationTests(unittest.TestCase):
                 self.assertEqual(errors, {})
                 self.assertEqual(cleaned["amount"], expected)
 
+    def test_new_transaction_defaults_to_today(self):
+        response = self.client.get("/add")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('value="2026-11-18"', response.get_data(as_text=True))
+
     def test_form_pages_load(self):
         for endpoint in (
             "/add",
@@ -238,7 +217,7 @@ class TransactionValidationTests(unittest.TestCase):
                 self.assertEqual(response.status_code, 200)
 
     def test_missing_transaction_returns_404(self):
-        for method in (self.client.get, self.client.post):
+        for method in (self.client.get, self.post):
             response = method(
                 "/edit/999999", data=self.valid_data()
             )
