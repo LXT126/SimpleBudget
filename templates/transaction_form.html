@@ -2,20 +2,12 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>{{ page_title }}</title>
+    <title>{{ page_title }} — SimpleBudget</title>
     <link rel="stylesheet"
           href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <header class="site-header">
-        <div class="header-inner">
-            <span class="brand-icon" aria-hidden="true">B</span>
-            <a class="brand-name" href="{{ url_for('index') }}">
-                SimpleBudget
-            </a>
-            <span class="header-note">Your money, clearly organised.</span>
-        </div>
-    </header>
+    {% include 'account_header.html' %}
 
     <main class="container form-container">
         <div class="page-heading">
@@ -25,10 +17,13 @@
             </div>
         </div>
 
-        <section class="panel form-panel" aria-label="{{ page_title }}">
+        <section class="panel form-panel"
+                 aria-label="{{ page_title }}">
             {% if errors %}
             <div class="alert" role="alert">
-                <p><strong>Please correct the following errors:</strong></p>
+                <p>
+                    <strong>Please correct the following errors:</strong>
+                </p>
                 <ul>
                     {% for message in errors.values() %}
                     <li>{{ message }}</li>
@@ -38,6 +33,10 @@
             {% endif %}
 
             <form action="{{ form_action }}" method="post">
+                <input type="hidden"
+                       name="csrf_token"
+                       value="{{ csrf_token() }}">
+
                 <div class="form-grid">
                     <div class="form-field">
                         <label for="date">Date (YYYY-MM-DD):</label>
@@ -50,6 +49,7 @@
                             aria-describedby="date-help"
                             {% if errors.get('date') %}aria-invalid="true"{% endif %}
                             required>
+
                         <small id="date-help">
                             {% if errors.get('date') %}
                             Correct the date using YYYY-MM-DD.
@@ -61,10 +61,14 @@
 
                     <div class="form-field">
                         <label for="category">Category:</label>
+
                         {% set categories = [
-                            'Groceries', 'Utilities', 'Rent', 'Salary', 'Misc'
+                            'Groceries', 'Utilities', 'Rent',
+                            'Salary', 'Misc'
                         ] %}
-                        <select name="category" id="category"
+
+                        <select name="category"
+                                id="category"
                                 {% if errors.get('category') %}aria-invalid="true"{% endif %}
                                 required>
                             {% if values.category not in categories %}
@@ -72,6 +76,7 @@
                                 {{ values.category if values.category else 'Choose a category' }}
                             </option>
                             {% endif %}
+
                             {% for category in categories %}
                             <option value="{{ category }}"
                                 {% if values.category == category %}selected{% endif %}>
@@ -93,6 +98,7 @@
                             aria-describedby="amount-help"
                             {% if errors.get('amount') %}aria-invalid="true"{% endif %}
                             required>
+
                         <small id="amount-help">
                             Greater than zero, with at most two decimal places.
                         </small>
@@ -100,7 +106,9 @@
 
                     <div class="form-field">
                         <label for="type">Type:</label>
-                        <select name="type" id="type"
+
+                        <select name="type"
+                                id="type"
                                 {% if errors.get('type') %}aria-invalid="true"{% endif %}
                                 required>
                             {% if values.type not in ['expense', 'income'] %}
@@ -108,10 +116,12 @@
                                 {{ values.type if values.type else 'Choose a type' }}
                             </option>
                             {% endif %}
+
                             <option value="expense"
                                 {% if values.type == 'expense' %}selected{% endif %}>
                                 Expense
                             </option>
+
                             <option value="income"
                                 {% if values.type == 'income' %}selected{% endif %}>
                                 Income
@@ -122,6 +132,7 @@
 
                 <div class="form-actions">
                     <button type="submit">{{ submit_label }}</button>
+
                     <a class="button button-secondary"
                        href="{{ url_for('index') }}">
                         Back to Home

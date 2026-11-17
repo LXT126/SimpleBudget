@@ -1,3 +1,4 @@
+from test_support import AccountTestCase
 import sqlite3
 import tempfile
 import unittest
@@ -9,47 +10,18 @@ from contextlib import closing
 import app as application
 
 
-class MonthSelectionTests(unittest.TestCase):
+class MonthSelectionTests(AccountTestCase):
     def setUp(self):
-        self.temp_dir = tempfile.TemporaryDirectory()
-        self.addCleanup(self.temp_dir.cleanup)
-        self.db_path = Path(self.temp_dir.name) / "test.db"
+        super().setUp()
+        for day, category, amount, kind in (
+            ("2026-10-31", "OctoberOnly", 10, "expense"),
+            ("2026-11-01", "NovemberStart", 20, "expense"),
+            ("2026-11-30", "NovemberEnd", 30, "income"),
+            ("2026-12-01", "DecemberOnly", 40, "expense"),
+            ("2025-11-15", "PreviousYear", 50, "expense"),
+        ):
+            self.insert_transaction(day, category, amount, kind)
 
-        with closing(sqlite3.connect(self.db_path)) as conn, conn:
-            conn.execute("""
-                CREATE TABLE transactions (
-                    id INTEGER PRIMARY KEY,
-                    date TEXT,
-                    category TEXT,
-                    amount REAL,
-                    type TEXT
-                )
-            """)
-            conn.executemany("""
-                INSERT INTO transactions
-                    (date, category, amount, type)
-                VALUES (?, ?, ?, ?)
-            """, [
-                ("2026-10-31", "OctoberOnly", 10, "expense"),
-                ("2026-11-01", "NovemberStart", 20, "expense"),
-                ("2026-11-30", "NovemberEnd", 30, "income"),
-                ("2026-12-01", "DecemberOnly", 40, "expense"),
-                ("2025-11-15", "PreviousYear", 50, "expense"),
-            ])
-
-        connection_patch = patch.object(
-            application,
-            "get_db_connection",
-            self.connect
-        )
-        connection_patch.start()
-        self.addCleanup(connection_patch.stop)
-        self.client = application.app.test_client()
-
-    def connect(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
 
     def test_month_boundaries(self):
         response = self.client.get("/?month=2026-11")
@@ -86,13 +58,8 @@ class MonthSelectionTests(unittest.TestCase):
         )
 
     def test_default_current_month(self):
-        today = date.today()
-        with closing(sqlite3.connect(self.db_path)) as conn, conn:
-            conn.execute("""
-                INSERT INTO transactions
-                    (date, category, amount, type)
-                VALUES (?, ?, ?, ?)
-            """, (today.isoformat(), "CurrentMonthRecord", 15, "expense"))
+        today = date(2026, 11, 18)
+        self.insert_transaction(today.isoformat(), "CurrentMonthRecord", 15)
 
         response = self.client.get("/")
         text = response.get_data(as_text=True)
@@ -127,7 +94,7 @@ class MonthSelectionTests(unittest.TestCase):
             before = [
                 tuple(row)
                 for row in conn.execute(
-                    "SELECT * FROM transactions ORDER BY id"
+                    "SELECT * FROM account_transactions ORDER BY id"
                 )
             ]
 
@@ -138,7 +105,7 @@ class MonthSelectionTests(unittest.TestCase):
             after = [
                 tuple(row)
                 for row in conn.execute(
-                    "SELECT * FROM transactions ORDER BY id"
+                    "SELECT * FROM account_transactions ORDER BY id"
                 )
             ]
 

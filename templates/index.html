@@ -7,15 +7,7 @@
           href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <header class="site-header">
-        <div class="header-inner">
-            <span class="brand-icon" aria-hidden="true">B</span>
-            <a class="brand-name" href="{{ url_for('index') }}">
-                SimpleBudget
-            </a>
-            <span class="header-note">Your money, clearly organised.</span>
-        </div>
-    </header>
+    {% include 'account_header.html' %}
 
     <main class="container">
         <div class="page-heading">
@@ -28,7 +20,8 @@
         </div>
 
         <section class="panel filter-panel" aria-label="Select a month">
-            <form class="inline-form" method="get"
+            <form class="inline-form"
+                  method="get"
                   action="{{ url_for('index') }}">
                 <label for="month">Month:</label>
                 <input type="month"
@@ -61,7 +54,9 @@
 
                     {% if monthly_budget is none %}
                     <p class="card-value">Not set</p>
-                    <p class="card-detail">No budget set for this month.</p>
+                    <p class="card-detail">
+                        No budget set for this month.
+                    </p>
                     {% else %}
                     <p class="card-value">CNY {{ monthly_budget }}</p>
                     <p class="card-detail">Current budget: CNY {{ monthly_budget }}</p>
@@ -71,8 +66,13 @@
                              {% if budget_error %}open{% endif %}>
                         <summary aria-label="Edit monthly budget">Edit</summary>
 
-                        <form method="post" action="{{ url_for('index') }}">
-                            <input type="hidden" name="month"
+                        <form method="post"
+                              action="{{ url_for('index') }}">
+                            <input type="hidden"
+                                   name="csrf_token"
+                                   value="{{ csrf_token() }}">
+                            <input type="hidden"
+                                   name="month"
                                    value="{{ selected_month }}">
 
                             <label for="budget">Budget (CNY):</label>
@@ -86,7 +86,9 @@
                                    required>
 
                             {% if budget_error %}
-                            <p class="alert" role="alert">{{ budget_error }}</p>
+                            <p class="alert" role="alert">
+                                {{ budget_error }}
+                            </p>
                             {% endif %}
 
                             <button class="button-small" type="submit">
@@ -98,7 +100,9 @@
 
                 <article class="summary-card expenses">
                     <h3 class="card-label">Total expenses</h3>
-                    <p class="card-value">CNY {{ summary.total_expenses }}</p>
+                    <p class="card-value">
+                        CNY {{ summary.total_expenses }}
+                    </p>
                     <p class="card-detail">Total expenses: CNY {{ summary.total_expenses }}</p>
                 </article>
 
@@ -111,7 +115,9 @@
                         Set a monthly budget to see your balance.
                     </p>
                     {% else %}
-                    <p class="card-value">CNY {{ summary.remaining_budget }}</p>
+                    <p class="card-value">
+                        CNY {{ summary.remaining_budget }}
+                    </p>
                     <p class="card-detail">Remaining budget: CNY {{ summary.remaining_budget }}</p>
                     {% endif %}
                 </article>
@@ -145,6 +151,7 @@
                         {{ transactions|length }} transaction{% if transactions|length != 1 %}s{% endif %}
                     </span>
                     {% endif %}
+
                     <a class="button" href="{{ url_for('add') }}">
                         + Add New Transaction
                     </a>
@@ -157,11 +164,14 @@
                     <tr>
                         <th scope="col">Date</th>
                         <th scope="col">Category</th>
-                        <th scope="col" class="amount-column">Amount (CNY)</th>
+                        <th scope="col" class="amount-column">
+                            Amount (CNY)
+                        </th>
                         <th scope="col">Type</th>
                         <th scope="col">Actions</th>
                     </tr>
                 </thead>
+
                 <tbody>
                     {% for transaction in transactions %}
                     <tr>
@@ -193,6 +203,9 @@
 
                                 <form method="post"
                                       action="{{ url_for('delete', id=transaction.id) }}">
+                                    <input type="hidden"
+                                           name="csrf_token"
+                                           value="{{ csrf_token() }}">
                                     <button type="submit"
                                             class="button-danger button-small">
                                         Delete
@@ -204,10 +217,13 @@
                     {% endfor %}
                 </tbody>
             </table>
+
             {% elif selected_month and not error %}
             <div class="empty-state">
                 <h3>No transactions for {{ selected_month }}.</h3>
-                <p>Use Add New Transaction to start tracking this month.</p>
+                <p>
+                    Use Add New Transaction to start tracking this month.
+                </p>
             </div>
             {% endif %}
         </section>
@@ -215,6 +231,7 @@
 
     <dialog id="transaction-dialog" aria-labelledby="dialog-heading">
         <h2 id="dialog-heading">Transaction Details</h2>
+
         <dl class="detail-list">
             <div class="detail-row">
                 <dt>Date</dt>
@@ -233,6 +250,7 @@
                 <dd id="detail-type"></dd>
             </div>
         </dl>
+
         <form method="dialog">
             <button>Close</button>
         </form>
@@ -245,12 +263,16 @@
             button.addEventListener("click", () => {
                 document.getElementById("detail-date").textContent =
                     button.dataset.date;
+
                 document.getElementById("detail-category").textContent =
                     button.dataset.category;
+
                 document.getElementById("detail-amount").textContent =
                     `CNY ${button.dataset.amount}`;
+
                 document.getElementById("detail-type").textContent =
                     button.dataset.type;
+
                 transactionDialog.showModal();
             });
         });

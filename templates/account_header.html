@@ -1,0 +1,44 @@
+<header class="site-header">
+    <div class="header-inner">
+        <span class="brand-icon" aria-hidden="true">B</span>
+
+        <a class="brand-name" href="{{ url_for('index') }}">
+            SimpleBudget
+        </a>
+
+        <div class="header-note"
+             style="display: flex; align-items: center; gap: 20px;">
+            {% if g.user %}
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <span style="
+                    color: var(--text);
+                    font-size: 18px;
+                    font-weight: 700;
+                    max-width: 240px;
+                    overflow-wrap: anywhere;
+                ">{{ g.user.username }}</span>
+
+                <span class="month-tag">
+                    {{ g.user.role }}
+                </span>
+            </div>
+
+            <form method="post"
+                  action="{{ url_for('logout') }}"
+                  style="margin: 0; flex-shrink: 0;">
+                <input type="hidden"
+                       name="csrf_token"
+                       value="{{ csrf_token() }}">
+
+                <button class="button-secondary"
+                        type="submit"
+                        style="padding: 9px 18px; font-size: 14px;">
+                    Log out
+                </button>
+            </form>
+            {% else %}
+            <span>Your money, clearly organised.</span>
+            {% endif %}
+        </div>
+    </div>
+</header>

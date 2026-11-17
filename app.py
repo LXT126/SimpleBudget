@@ -1,33 +1,265 @@
-from flask import Flask, render_template, request, redirect, url_for
+import os
+import secrets
 import sqlite3
 from datetime import date
+from functools import wraps
+from pathlib import Path
 
+import click
+from flask import (
+    Flask, abort, g, redirect, render_template,
+    request, session, url_for,
+)
+from werkzeug.security import check_password_hash
+
+from account_storage import (
+    create_user, import_legacy_data, init_account_tables,
+)
+from monthly_budget import validate_budget, validate_month
 from monthly_summary import calculate_monthly_summary
 from transaction_validation import validate_transaction
-from monthly_budget import (
-    validate_month,
-    get_monthly_budget,
-    save_monthly_budget,
-)
+
 
 app = Flask(__name__)
 
+# Keep the session signing key outside the source code.
+secret_key = os.environ.get("SIMPLEBUDGET_SECRET_KEY")
+if not secret_key:
+    instance_dir = Path(app.instance_path)
+    instance_dir.mkdir(parents=True, exist_ok=True)
+    key_file = instance_dir / "session.key"
+    try:
+        with key_file.open("x", encoding="utf-8") as file:
+            file.write(secrets.token_hex(32))
+    except FileExistsError:
+        pass
+    secret_key = key_file.read_text(encoding="utf-8").strip()
+
+app.config.update(
+    SECRET_KEY=secret_key,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    MAX_CONTENT_LENGTH=1024 * 1024,
+)
+
 
 def get_db_connection():
-    conn = sqlite3.connect('finance.db')
+    conn = sqlite3.connect("finance.db")
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
-@app.route('/', methods=('GET', 'POST'))
-def index():
-    if request.method == 'POST':
-        selected_month = request.form.get('month', '')
-    else:
-        selected_month = request.args.get(
-            'month', date.today().strftime('%Y-%m')
+def get_db():
+    if "db" not in g:
+        g.db = get_db_connection()
+        with g.db:
+            init_account_tables(g.db)
+    return g.db
+
+
+@app.teardown_appcontext
+def close_db(error=None):
+    conn = g.pop("db", None)
+    if conn is not None:
+        conn.close()
+
+
+def csrf_token():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    return session["csrf_token"]
+
+
+app.jinja_env.globals["csrf_token"] = csrf_token
+
+
+@app.before_request
+def load_user_and_check_form():
+    g.user = None
+
+    if request.endpoint == "static":
+        return
+
+    user_id = session.get("user_id")
+    if user_id is not None:
+        g.user = get_db().execute(
+            """SELECT id, username, role, registered_at
+               FROM users WHERE id = ?""",
+            (user_id,),
+        ).fetchone()
+
+        if g.user is None:
+            session.clear()
+
+    if request.method == "POST":
+        expected = session.get("csrf_token", "")
+        supplied = request.form.get("csrf_token", "")
+        if not expected or not secrets.compare_digest(expected, supplied):
+            abort(400, description="Form expired. Reload the page and try again.")
+
+
+@app.after_request
+def prevent_private_page_caching(response):
+    if request.endpoint != "static":
+        response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+def user_required(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if g.user is None:
+            return redirect(url_for("login"))
+        if g.user["role"] != "user":
+            return redirect(url_for("admin"))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def read_budget(conn, user_id, month):
+    row = conn.execute(
+        """SELECT amount FROM account_monthly_budgets
+           WHERE user_id = ? AND month = ?""",
+        (user_id, month),
+    ).fetchone()
+
+    if row is None:
+        row = conn.execute(
+            """SELECT amount FROM account_budget_defaults
+               WHERE user_id = ? AND month <= ?
+               ORDER BY month DESC LIMIT 1""",
+            (user_id, month),
+        ).fetchone()
+
+    if row is None:
+        return None
+
+    from decimal import Decimal
+    return Decimal(row["amount"])
+
+
+def save_budget(conn, user_id, month, value):
+    if not validate_month(month):
+        raise ValueError("Invalid month. Use YYYY-MM.")
+
+    amount = validate_budget(value)
+    with conn:
+        conn.execute(
+            """INSERT INTO account_monthly_budgets
+               (user_id, month, amount) VALUES (?, ?, ?)
+               ON CONFLICT(user_id, month)
+               DO UPDATE SET amount = excluded.amount""",
+            (user_id, month, amount),
         )
 
+        if month >= date.today().strftime("%Y-%m"):
+            conn.execute(
+                """INSERT INTO account_budget_defaults
+                   (user_id, month, amount) VALUES (?, ?, ?)
+                   ON CONFLICT(user_id, month)
+                   DO UPDATE SET amount = excluded.amount""",
+                (user_id, month, amount),
+            )
+
+
+@app.route("/register", methods=("GET", "POST"))
+def register():
+    error = None
+    username = ""
+    status = 200
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        confirmation = request.form.get("confirm_password", "")
+
+        if password != confirmation:
+            error = "Passwords do not match."
+            status = 400
+        else:
+            try:
+                # Public registration always creates a regular user.
+                create_user(get_db(), username, password, role="user")
+            except ValueError as exc:
+                error = str(exc)
+                status = 400
+            except sqlite3.IntegrityError:
+                error = "This username is already in use."
+                status = 400
+            else:
+                return redirect(url_for("login", registered="1"))
+
+    return render_template(
+        "auth.html", registering=True, error=error, username=username,
+    ), status
+
+
+@app.route("/login", methods=("GET", "POST"))
+def login():
+    error = None
+    username = ""
+    status = 200
+
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        user = get_db().execute(
+            "SELECT * FROM users WHERE username = ?",
+            (username,),
+        ).fetchone()
+
+        if user is None or not check_password_hash(
+            user["password_hash"], password
+        ):
+            error = "Invalid username or password."
+            status = 400
+        else:
+            session.clear()
+            session["user_id"] = user["id"]
+            return redirect(url_for(
+                "admin" if user["role"] == "admin" else "index"
+            ))
+
+    return render_template(
+        "auth.html", registering=False, error=error, username=username,
+    ), status
+
+
+@app.post("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.get("/admin")
+def admin():
+    if g.user is None:
+        return redirect(url_for("login"))
+    if g.user["role"] != "admin":
+        abort(403)
+
+    users = get_db().execute(
+        """SELECT id, username, role, registered_at
+           FROM users ORDER BY registered_at DESC, id DESC"""
+    ).fetchall()
+
+    return render_template(
+        "admin.html",
+        users=users,
+        regular_count=sum(user["role"] == "user" for user in users),
+        admin_count=sum(user["role"] == "admin" for user in users),
+    )
+
+
+@app.route("/", methods=("GET", "POST"))
+@user_required
+def index():
+    selected_month = (
+        request.form.get("month", "")
+        if request.method == "POST"
+        else request.args.get("month", date.today().strftime("%Y-%m"))
+    )
     error = None
     budget_error = None
     monthly_budget = None
@@ -35,49 +267,38 @@ def index():
     status = 200
 
     if validate_month(selected_month):
-        conn = get_db_connection()
-        try:
-            transactions = conn.execute(
-                """SELECT * FROM transactions
-                   WHERE substr(date, 1, 7) = ?
-                   ORDER BY date, id""",
-                (selected_month,)
-            ).fetchall()
+        conn = get_db()
+        user_id = g.user["id"]
+        transactions = conn.execute(
+            """SELECT * FROM account_transactions
+               WHERE user_id = ? AND substr(date, 1, 7) = ?
+               ORDER BY date, id""",
+            (user_id, selected_month),
+        ).fetchall()
+        monthly_budget = read_budget(conn, user_id, selected_month)
 
-            monthly_budget = get_monthly_budget(conn, selected_month)
-
-            if request.method == 'POST':
-                try:
-                    save_monthly_budget(
-                        conn,
-                        selected_month,
-                        request.form.get('budget', '')
-                    )
-                except ValueError as exc:
-                    budget_error = str(exc)
-                    status = 400
-                except sqlite3.Error:
-                    budget_error = (
-                        'Budget could not be saved. Please try again.'
-                    )
-                    status = 503
-                else:
-                    return redirect(
-                        url_for('index', month=selected_month)
-                    )
-        finally:
-            conn.close()
+        if request.method == "POST":
+            try:
+                save_budget(
+                    conn, user_id, selected_month,
+                    request.form.get("budget", ""),
+                )
+            except ValueError as exc:
+                budget_error = str(exc)
+                status = 400
+            except sqlite3.Error:
+                budget_error = "Budget could not be saved. Please try again."
+                status = 503
+            else:
+                return redirect(url_for("index", month=selected_month))
     else:
-        error = (
-            'Invalid month. Use YYYY-MM with a year from 0001 to 9999.'
-        )
-        selected_month = ''
+        error = "Invalid month. Use YYYY-MM with a year from 0001 to 9999."
+        selected_month = ""
         status = 400
 
     summary = calculate_monthly_summary(transactions, monthly_budget)
-
     return render_template(
-        'index.html',
+        "index.html",
         transactions=transactions,
         selected_month=selected_month,
         error=error,
@@ -85,12 +306,13 @@ def index():
         summary=summary,
         monthly_budget=(
             None if monthly_budget is None
-            else format(monthly_budget, '.2f')
-        )
+            else format(monthly_budget, ".2f")
+        ),
     ), status
 
 
-@app.route('/add', methods=('GET', 'POST'))
+@app.route("/add", methods=("GET", "POST"))
+@user_required
 def add():
     values = {
         "date": date.today().isoformat(),
@@ -100,106 +322,131 @@ def add():
     }
     errors = {}
 
-    if request.method == 'POST':
+    if request.method == "POST":
         values, cleaned, errors = validate_transaction(request.form)
-
-        if errors:
-            return render_template(
-                'add.html',
-                values=values,
-                errors=errors,
-            ), 400
-
-        conn = get_db_connection()
-        try:
+        if not errors:
+            conn = get_db()
             with conn:
                 conn.execute(
-                    """INSERT INTO transactions
-                       (date, category, amount, type)
-                       VALUES (?, ?, ?, ?)""",
+                    """INSERT INTO account_transactions
+                       (user_id, date, category, amount, type)
+                       VALUES (?, ?, ?, ?, ?)""",
                     (
-                        cleaned["date"],
-                        cleaned["category"],
-                        cleaned["amount"],
-                        cleaned["type"],
+                        g.user["id"], cleaned["date"], cleaned["category"],
+                        cleaned["amount"], cleaned["type"],
                     ),
                 )
-        finally:
-            conn.close()
-
-        return redirect('/')
+            return redirect(url_for("index", month=cleaned["date"][:7]))
 
     return render_template(
-        'add.html',
-        values=values,
-        errors=errors,
-    )
+        "add.html", values=values, errors=errors,
+    ), 400 if errors else 200
 
 
-@app.route('/delete/<int:id>', methods=('POST',))
-def delete(id):
-    conn = get_db_connection()
-    conn.execute(
-        'DELETE FROM transactions WHERE id = ?', (id,)
-    )
-    conn.commit()
-    conn.close()
-    return redirect('/')
-
-
-@app.route('/edit/<int:id>', methods=('GET', 'POST'))
+@app.route("/edit/<int:id>", methods=("GET", "POST"))
+@user_required
 def edit(id):
-    conn = get_db_connection()
-    try:
-        transaction = conn.execute(
-            'SELECT * FROM transactions WHERE id = ?', (id,)
-        ).fetchone()
+    conn = get_db()
+    transaction = conn.execute(
+        """SELECT * FROM account_transactions
+           WHERE id = ? AND user_id = ?""",
+        (id, g.user["id"]),
+    ).fetchone()
 
-        if transaction is None:
-            return "Transaction not found.", 404
+    if transaction is None:
+        abort(404, description="Transaction not found.")
 
-        values = {
-            field: str(transaction[field])
-            for field in ("date", "category", "amount", "type")
-        }
-        errors = {}
+    values = {
+        field: str(transaction[field])
+        for field in ("date", "category", "amount", "type")
+    }
+    errors = {}
 
-        if request.method == 'POST':
-            values, cleaned, errors = validate_transaction(request.form)
-
-            if errors:
-                return render_template(
-                    'edit.html',
-                    transaction=transaction,
-                    values=values,
-                    errors=errors,
-                ), 400
-
+    if request.method == "POST":
+        values, cleaned, errors = validate_transaction(request.form)
+        if not errors:
             with conn:
                 conn.execute(
-                    """UPDATE transactions
+                    """UPDATE account_transactions
                        SET date = ?, category = ?, amount = ?, type = ?
-                       WHERE id = ?""",
+                       WHERE id = ? AND user_id = ?""",
                     (
-                        cleaned["date"],
-                        cleaned["category"],
-                        cleaned["amount"],
-                        cleaned["type"],
-                        id,
+                        cleaned["date"], cleaned["category"],
+                        cleaned["amount"], cleaned["type"],
+                        id, g.user["id"],
                     ),
                 )
+            return redirect(url_for("index", month=cleaned["date"][:7]))
 
-            return redirect('/')
+    return render_template(
+        "edit.html", transaction=transaction,
+        values=values, errors=errors,
+    ), 400 if errors else 200
 
-        return render_template(
-            'edit.html',
-            transaction=transaction,
-            values=values,
-            errors=errors,
+
+@app.post("/delete/<int:id>")
+@user_required
+def delete(id):
+    conn = get_db()
+    transaction = conn.execute(
+        """SELECT date FROM account_transactions
+           WHERE id = ? AND user_id = ?""",
+        (id, g.user["id"]),
+    ).fetchone()
+
+    if transaction is None:
+        abort(404, description="Transaction not found.")
+
+    with conn:
+        conn.execute(
+            "DELETE FROM account_transactions WHERE id = ? AND user_id = ?",
+            (id, g.user["id"]),
         )
-    finally:
-        conn.close()
+    return redirect(url_for("index", month=transaction["date"][:7]))
+
+
+@app.cli.command("create-account")
+@click.option("--admin", "is_admin", is_flag=True)
+@click.option("--username", prompt=True)
+@click.password_option()
+def create_account_command(is_admin, username, password):
+    """Create an account locally; administrators cannot self-register."""
+    try:
+        create_user(
+            get_db(), username, password,
+            role="admin" if is_admin else "user",
+        )
+    except (ValueError, sqlite3.IntegrityError) as exc:
+        raise click.ClickException(
+            "Username already exists."
+            if isinstance(exc, sqlite3.IntegrityError) else str(exc)
+        ) from exc
+    click.echo("Account created.")
+
+
+@app.cli.command("import-existing-data")
+@click.option("--username", prompt=True)
+def import_existing_data_command(username):
+    """Assign the original financial data to a chosen regular account."""
+    conn = get_db()
+    user = conn.execute(
+        "SELECT id FROM users WHERE username = ?",
+        (username.strip(),),
+    ).fetchone()
+
+    if user is None:
+        raise click.ClickException("Account not found.")
+
+    try:
+        imported = import_legacy_data(conn, user["id"])
+    except (ValueError, sqlite3.Error) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(
+        "Existing data imported."
+        if imported else "Already imported; no duplicate records created."
+    )
 
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host="127.0.0.1", port=5000)

@@ -246,3 +246,31 @@ Validation:
 python -m unittest -v test_month_selection test_monthly_budget test_monthly_summary test_transaction_validation test_budget_inheritance
 
 All 47 tests passed.
+
+### Accounts and access
+
+- Register a regular user account through the registration page.
+- Log in with a username and password.
+- Regular users can access only their own transactions and budgets.
+- Administrators can view account counts, usernames, registration
+  times, and roles. Registration times display in Beijing time
+  (UTC+08:00).
+- Administrator accounts are created locally:
+
+  python -m flask --app app create-account --admin --username admin
+
+- Existing financial data can be imported once into a regular account:
+
+  python -m flask --app app import-existing-data --username USERNAME
+
+- Original financial tables are retained after import.
+- Passwords are stored as hashes.
+- POST forms require a CSRF token.
+- The local session key is stored in the ignored instance directory.
+
+### Run all tests
+
+python -m unittest discover -s tests -v
+
+All 64 tests passed on Windows with Python 3.13.
+Tests use temporary databases without modifying finance.db.

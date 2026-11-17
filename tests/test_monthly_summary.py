@@ -1,3 +1,4 @@
+from test_support import AccountTestCase
 import sqlite3
 import tempfile
 import unittest
@@ -6,50 +7,18 @@ from pathlib import Path
 from unittest.mock import patch
 
 import app as application
-from monthly_budget import save_monthly_budget
 
 
-class MonthlySummaryTests(unittest.TestCase):
+class MonthlySummaryTests(AccountTestCase):
     def setUp(self):
-        temp_dir = tempfile.TemporaryDirectory()
-        self.addCleanup(temp_dir.cleanup)
-        self.db_path = Path(temp_dir.name) / "test.db"
+        super().setUp()
 
-        with closing(self.connect()) as conn, conn:
-            conn.execute(
-                """CREATE TABLE transactions (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    date TEXT NOT NULL,
-                    category TEXT NOT NULL,
-                    amount REAL NOT NULL,
-                    type TEXT NOT NULL
-                )"""
-            )
-
-        connection_patch = patch.object(
-            application, "get_db_connection", self.connect
-        )
-        connection_patch.start()
-        self.addCleanup(connection_patch.stop)
-        self.client = application.app.test_client()
-
-    def connect(self):
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
 
     def add_transaction(self, amount, kind="expense", day="2026-11-15"):
-        with closing(self.connect()) as conn, conn:
-            cursor = conn.execute(
-                """INSERT INTO transactions (date, category, amount, type)
-                   VALUES (?, ?, ?, ?)""",
-                (day, "Food", amount, kind),
-            )
-            return cursor.lastrowid
+        return self.insert_transaction(day, "Food", amount, kind)
 
     def set_budget(self, amount, month="2026-11"):
-        with closing(self.connect()) as conn:
-            save_monthly_budget(conn, month, amount)
+        self.write_budget(month, amount)
 
     def page(self, month="2026-11"):
         response = self.client.get("/", query_string={"month": month})
@@ -141,7 +110,7 @@ class MonthlySummaryTests(unittest.TestCase):
 
     def test_summary_updates_after_transaction_changes(self):
         self.set_budget("100")
-        response = self.client.post(
+        response = self.post(
             "/add",
             data={
                 "date": "2026-11-15",
@@ -155,10 +124,10 @@ class MonthlySummaryTests(unittest.TestCase):
 
         with closing(self.connect()) as conn:
             transaction_id = conn.execute(
-                "SELECT id FROM transactions"
+                "SELECT id FROM account_transactions"
             ).fetchone()["id"]
 
-        response = self.client.post(
+        response = self.post(
             f"/edit/{transaction_id}",
             data={
                 "date": "2026-11-15",
@@ -173,7 +142,7 @@ class MonthlySummaryTests(unittest.TestCase):
         self.assertIn("Remaining budget: CNY 60.00", page)
         self.assertNotIn("Overspending alert:", page)
 
-        response = self.client.post(f"/delete/{transaction_id}")
+        response = self.post(f"/delete/{transaction_id}")
         self.assertEqual(response.status_code, 302)
         page = self.page()
         self.assertIn("Total expenses: CNY 0.00", page)
@@ -184,7 +153,7 @@ class MonthlySummaryTests(unittest.TestCase):
         self.set_budget("100")
         self.assertIn("Overspending alert:", self.page())
 
-        response = self.client.post(
+        response = self.post(
             "/", data={"month": "2026-11", "budget": "150"}
         )
         self.assertEqual(response.status_code, 302)

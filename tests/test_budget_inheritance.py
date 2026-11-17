@@ -1,34 +1,27 @@
+from test_support import AccountTestCase
 import sqlite3
 import unittest
 from datetime import date
 from unittest.mock import patch
 
-from monthly_budget import (
-    get_monthly_budget,
-    init_budget_table,
-    save_monthly_budget,
-)
+from account_storage import init_account_tables, import_legacy_data
+import app as application
 
 
-class BudgetInheritanceTests(unittest.TestCase):
+class BudgetInheritanceTests(AccountTestCase):
     def setUp(self):
-        self.conn = sqlite3.connect(":memory:")
-        self.conn.row_factory = sqlite3.Row
+        super().setUp()
+        self.conn = self.connect()
         self.addCleanup(self.conn.close)
-
-        date_patch = patch("monthly_budget.date")
-        self.clock = date_patch.start()
-        self.addCleanup(date_patch.stop)
-        self.set_today(2026, 11)
 
     def set_today(self, year, month):
         self.clock.today.return_value = date(year, month, 18)
 
     def save(self, month, amount):
-        save_monthly_budget(self.conn, month, amount)
+        application.save_budget(self.conn, self.user_id, month, amount)
 
     def read(self, month):
-        amount = get_monthly_budget(self.conn, month)
+        amount = application.read_budget(self.conn, self.user_id, month)
         return None if amount is None else format(amount, ".2f")
 
     def test_budget_carries_forward_across_years(self):
@@ -76,7 +69,7 @@ class BudgetInheritanceTests(unittest.TestCase):
         self.assertEqual(self.read("2027-03"), "1200.00")
 
         # Reinitialisation must not overwrite the preserved default.
-        init_budget_table(self.conn)
+        init_account_tables(self.conn)
         self.assertEqual(self.read("2027-03"), "1200.00")
 
     def test_historical_first_budget_does_not_create_default(self):
@@ -108,24 +101,19 @@ class BudgetInheritanceTests(unittest.TestCase):
 
     def test_existing_database_is_migrated_once(self):
         with self.conn:
-            self.conn.execute(
-                """CREATE TABLE monthly_budgets (
-                       month TEXT PRIMARY KEY,
-                       amount TEXT NOT NULL
-                   )"""
-            )
-            self.conn.executemany(
-                "INSERT INTO monthly_budgets VALUES (?, ?)",
-                [
-                    ("2026-11", "1200.00"),
-                    ("2027-02", "1500.00"),
-                ]
-            )
-
+            self.conn.execute("""CREATE TABLE transactions (
+                id INTEGER PRIMARY KEY, date TEXT, category TEXT,
+                amount REAL, type TEXT)""")
+            self.conn.execute("CREATE TABLE monthly_budgets (month TEXT PRIMARY KEY, amount TEXT NOT NULL)")
+            self.conn.execute("CREATE TABLE monthly_budget_defaults (month TEXT PRIMARY KEY, amount TEXT NOT NULL)")
+            records = [("2026-11", "1200.00"), ("2027-02", "1500.00")]
+            self.conn.executemany("INSERT INTO monthly_budgets VALUES (?, ?)", records)
+            self.conn.executemany("INSERT INTO monthly_budget_defaults VALUES (?, ?)", records)
+        self.assertTrue(import_legacy_data(self.conn, self.user_id))
         self.assertIsNone(self.read("2026-10"))
         self.assertEqual(self.read("2027-01"), "1200.00")
         self.assertEqual(self.read("2027-03"), "1500.00")
-
+        self.assertFalse(import_legacy_data(self.conn, self.user_id))
         self.set_today(2027, 3)
         self.save("2026-11", "900")
         self.assertEqual(self.read("2026-12"), "1200.00")
@@ -136,7 +124,7 @@ class BudgetInheritanceTests(unittest.TestCase):
         with self.conn:
             self.conn.execute(
                 """CREATE TRIGGER reject_default_update
-                   BEFORE UPDATE ON monthly_budget_defaults
+                   BEFORE UPDATE ON account_budget_defaults
                    BEGIN
                        SELECT RAISE(ABORT, 'Simulated save failure');
                    END"""
