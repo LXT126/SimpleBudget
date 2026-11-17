@@ -146,3 +146,19 @@ flask run --host=0.0.0.0
 ``` bash
 http://localhost:5000
 ``` 
+
+## Month selection — Issue #3
+
+The homepage defaults to the current month. Select a month and click
+"Show transactions" to view its records. Empty months show a message;
+invalid month parameters return HTTP 400 without changing stored data.
+
+Run the automated tests from the project root after installing dependencies:
+
+```bash
+python -m unittest -v test_month_selection
+```
+
+The seven tests cover month boundaries, year isolation, empty months,
+selection retention, the current-month default, invalid parameters,
+and unchanged database contents. Tests use a temporary SQLite database.
