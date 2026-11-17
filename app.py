@@ -93,7 +93,7 @@ def index():
 @app.route('/add', methods=('GET', 'POST'))
 def add():
     values = {
-        "date": "",
+        "date": date.today().isoformat(),
         "category": "Groceries",
         "amount": "",
         "type": "expense",

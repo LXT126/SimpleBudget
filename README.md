@@ -229,3 +229,20 @@ Validation tests use a temporary SQLite database and cover valid adds
 and edits, invalid and missing fields, unchanged stored data after
 rejection, input retention, whitespace trimming, amount normalization,
 leap dates, form loading, and missing transactions.
+
+### Desktop interface and budget inheritance
+
+- Use a consistent desktop layout for the home, add, and edit pages.
+- Add transactions from the Transactions section.
+- Edit monthly budgets within the Monthly budget summary card.
+- Default new transaction dates to today, with a day-level calendar picker.
+- Budgets saved for the current or a future month apply from that month
+  until a later saved default takes effect.
+- Editing a past month changes only that month.
+- Zero is a valid budget and can be inherited.
+- Existing saved budgets are retained during automatic migration.
+
+Validation:
+python -m unittest -v test_month_selection test_monthly_budget test_monthly_summary test_transaction_validation test_budget_inheritance
+
+All 47 tests passed.
