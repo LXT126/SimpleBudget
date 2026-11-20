@@ -1,0 +1,100 @@
+<section class="panel table-panel"
+         style="margin:26px 0;"
+         aria-labelledby="category-summary-heading">
+    <div class="section-heading table-heading">
+        <div>
+            <h2 id="category-summary-heading">
+                Category spending summary — {{ report_month }}
+            </h2>
+            <p class="muted">
+                Expenses only. Category budgets are independent
+                of the overall monthly budget.
+            </p>
+        </div>
+
+        {% if not allow_budget_edit %}
+        <a class="button button-secondary"
+           href="{{ url_for('category_budgets', month=report_month) }}">
+            Manage category budgets
+        </a>
+        {% endif %}
+    </div>
+
+    {% for row in category_rows if row.overspent %}
+    <p class="alert" role="alert" style="margin:16px 24px;">
+        <strong>Category overspending alert: {{ row.category }}</strong>
+        — expenses CNY {{ row.expenses }} exceed the category
+        budget of CNY {{ row.budget }}.
+    </p>
+    {% endfor %}
+
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">Category</th>
+                <th scope="col">Budget (CNY)</th>
+                <th scope="col">Expenses (CNY)</th>
+                <th scope="col">Remaining (CNY)</th>
+                <th scope="col">Status</th>
+
+                {% if allow_budget_edit %}
+                <th scope="col">Actions</th>
+                {% endif %}
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for row in category_rows %}
+            <tr data-category="{{ row.category }}">
+                <td>{{ row.category }}</td>
+
+                <td>
+                    {% if row.budget is none %}
+                    Not set
+                    {% else %}
+                    CNY {{ row.budget }}
+                    {% endif %}
+                </td>
+
+                <td>CNY {{ row.expenses }}</td>
+
+                <td{% if row.overspent %} style="color:#be123c; font-weight:700;"{% endif %}>
+                    {% if row.remaining is none %}
+                    Not available
+                    {% else %}
+                    CNY {{ row.remaining }}
+                    {% endif %}
+                </td>
+
+                <td>
+                    <span style="
+                        display:inline-block;
+                        padding:6px 10px;
+                        border-radius:8px;
+                        {% if row.overspent %}
+                        background:#fff1f2; color:#be123c;
+                        {% elif row.budget is none %}
+                        background:#f1f5f9; color:#64748b;
+                        {% else %}
+                        background:#ecfdf5; color:#047857;
+                        {% endif %}
+                    ">
+                        {{ row.status }}
+                    </span>
+                </td>
+
+                {% if allow_budget_edit %}
+                <td>
+                    <button type="button"
+                            class="button-secondary button-small edit-category"
+                            data-category="{{ row.category }}"
+                            data-amount="{{ row.budget if row.budget is not none else '' }}">
+                        Edit
+                    </button>
+                </td>
+                {% endif %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>

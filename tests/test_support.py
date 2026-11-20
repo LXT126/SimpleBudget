@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import app as application
-from account_storage import create_user, init_account_tables
+from finance.account_storage import create_user, init_account_tables
 
 
 class AccountTestCase(unittest.TestCase):

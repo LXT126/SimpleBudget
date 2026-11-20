@@ -5,7 +5,7 @@ from contextlib import closing
 from werkzeug.security import check_password_hash
 
 import app as application
-from account_storage import import_legacy_data
+from finance.account_storage import import_legacy_data
 from test_support import AccountTestCase
 
 
