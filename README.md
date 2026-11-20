@@ -385,3 +385,37 @@ Business modules are grouped in the `finance` package.
 
 Run the application with `python app.py`.
 Run tests with `python -m unittest discover -s tests -v`.
+
+## Direct transaction recategorisation (B7, issue #19)
+
+The Transactions section provides a **Change category** action.
+
+The focused form shows the transaction's current category and allows
+the user to select a default or personally available category.
+Users can also add a private custom category through the existing dialog.
+
+Saving changes only the category. The transaction ID, owner, date,
+amount and income/expense type remain unchanged.
+
+Saving or cancelling returns to the Transactions section for the
+previously selected month.
+
+Category expenses, remaining budgets and overspending alerts are
+recalculated on the returned page. Overall monthly expenses and
+remaining budget are unaffected by a category-only change.
+
+Empty or unavailable categories are rejected. Failed validation or
+database updates preserve the existing transaction.
+
+The workflow requires a regular user session, transaction ownership,
+and a valid CSRF token. The existing full Edit workflow remains available.
+
+B7 adds 18 tests covering field preservation, month retention, category
+availability, ownership, CSRF, invalid input, failed saves, unchanged
+categories, income transactions, and category summary updates.
+
+Run all tests from the project root:
+
+```powershell
+python -m unittest discover -s tests -v
+```

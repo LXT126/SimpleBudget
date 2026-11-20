@@ -5,6 +5,196 @@
     <title>Personal Finance Manager</title>
     <link rel="stylesheet"
           href="{{ url_for('static', filename='style.css') }}">
+
+    <style>
+        .category-picker {
+            display: inline-block;
+        }
+
+        .category-trigger {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 10px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            background: transparent;
+            color: #193052;
+            font: inherit;
+            cursor: pointer;
+            text-align: left;
+        }
+
+        .category-trigger:hover,
+        .category-trigger[aria-expanded="true"] {
+            border-color: #c7d7fe;
+            background: #eff6ff;
+            color: #2563eb;
+        }
+
+        .category-trigger:focus-visible {
+            outline: 2px solid #2563eb;
+            outline-offset: 2px;
+        }
+
+        .category-arrow {
+            color: #64748b;
+            font-size: 12px;
+        }
+
+        .category-options {
+            position: fixed;
+            z-index: 1000;
+            min-width: 170px;
+            max-width: 280px;
+            max-height: 260px;
+            overflow-y: auto;
+            padding: 6px;
+            border: 1px solid #dbe4f0;
+            border-radius: 10px;
+            background: white;
+            box-shadow: 0 10px 28px rgba(25, 48, 82, 0.16);
+        }
+
+        .category-options[hidden] {
+            display: none;
+        }
+
+        .category-options form {
+            display: block;
+            margin: 0;
+        }
+
+        .category-options .category-option {
+            display: block;
+            width: 100%;
+            padding: 9px 12px;
+            border: 0;
+            border-radius: 6px;
+            background: white;
+            color: #193052;
+            font: inherit;
+            text-align: left;
+            white-space: normal;
+            overflow-wrap: anywhere;
+            cursor: pointer;
+        }
+
+        .category-options .category-option:hover,
+        .category-options .category-option:focus-visible {
+            background: #eff6ff;
+            color: #2563eb;
+        }
+
+        .category-options .category-option:disabled {
+            background: #f1f5f9;
+            color: #64748b;
+            cursor: default;
+            opacity: 1;
+        }
+
+/* transactions-layout-start */
+section[aria-labelledby="transactions-heading"] .table-heading {
+    padding: 20px 24px;
+}
+
+section[aria-labelledby="transactions-heading"] table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+section[aria-labelledby="transactions-heading"] th,
+section[aria-labelledby="transactions-heading"] td {
+    padding: 14px 12px;
+    text-align: center;
+    vertical-align: middle;
+}
+
+section[aria-labelledby="transactions-heading"] th {
+    padding-top: 12px;
+    padding-bottom: 12px;
+}
+
+section[aria-labelledby="transactions-heading"] th:nth-child(1) {
+    width: 20%;
+}
+
+section[aria-labelledby="transactions-heading"] th:nth-child(2) {
+    width: 17%;
+}
+
+section[aria-labelledby="transactions-heading"] th:nth-child(3) {
+    width: 19%;
+}
+
+section[aria-labelledby="transactions-heading"] th:nth-child(4) {
+    width: 16%;
+}
+
+section[aria-labelledby="transactions-heading"] th:nth-child(5) {
+    width: 28%;
+}
+
+section[aria-labelledby="transactions-heading"] .amount-column {
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+}
+
+section[aria-labelledby="transactions-heading"] .category-picker {
+    display: inline-block;
+    width: auto;
+    max-width: 100%;
+}
+
+section[aria-labelledby="transactions-heading"] .category-trigger {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    width: auto;
+    max-width: 100%;
+    margin: 0;
+    padding: 6px 8px;
+    gap: 7px;
+    text-align: center;
+}
+
+section[aria-labelledby="transactions-heading"] .category-trigger > span:first-child {
+    min-width: 0;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
+}
+
+section[aria-labelledby="transactions-heading"] .category-arrow {
+    flex: 0 0 auto;
+}
+
+section[aria-labelledby="transactions-heading"] .actions {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+section[aria-labelledby="transactions-heading"] .actions form {
+    margin: 0;
+}
+
+section[aria-labelledby="transactions-heading"] .actions .button-small {
+    padding: 7px 11px;
+    min-height: 0;
+    font-size: 14px;
+    line-height: 1.4;
+    white-space: nowrap;
+}
+/* transactions-layout-end */
+
+    </style>
 </head>
 <body>
     {% include 'account_header.html' %}
@@ -54,9 +244,7 @@
 
                     {% if monthly_budget is none %}
                     <p class="card-value">Not set</p>
-                    <p class="card-detail">
-                        No budget set for this month.
-                    </p>
+                    <p class="card-detail">No budget set for this month.</p>
                     {% else %}
                     <p class="card-value">CNY {{ monthly_budget }}</p>
                     <p class="card-detail">Current budget: CNY {{ monthly_budget }}</p>
@@ -67,12 +255,8 @@
                         <summary aria-label="Edit monthly budget">Edit</summary>
 
                         <form method="post" action="{{ url_for('index') }}">
-                            <input type="hidden"
-                                   name="csrf_token"
-                                   value="{{ csrf_token() }}">
-                            <input type="hidden"
-                                   name="month"
-                                   value="{{ selected_month }}">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="month" value="{{ selected_month }}">
 
                             <label for="budget">Budget (CNY):</label>
                             <input type="number"
@@ -85,9 +269,7 @@
                                    required>
 
                             {% if budget_error %}
-                            <p class="alert" role="alert">
-                                {{ budget_error }}
-                            </p>
+                            <p class="alert" role="alert">{{ budget_error }}</p>
                             {% endif %}
 
                             <button class="button-small" type="submit">
@@ -173,15 +355,51 @@
                     {% for transaction in transactions %}
                     <tr>
                         <td>{{ transaction.date }}</td>
-                        <td>{{ transaction.category }}</td>
+
+                        <td>
+                            <div class="category-picker">
+                                <button type="button"
+                                        class="category-trigger"
+                                        title="Change"
+                                        aria-label="Change category: {{ transaction.category }}"
+                                        aria-expanded="false"
+                                        aria-controls="category-options-{{ transaction.id }}">
+                                    <span>{{ transaction.category }}</span>
+                                    <span class="category-arrow" aria-hidden="true">▾</span>
+                                </button>
+
+                                <div class="category-options"
+                                     id="category-options-{{ transaction.id }}"
+                                     hidden>
+                                    <form method="post"
+                                          action="{{ url_for('recategorise', id=transaction.id) }}">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <input type="hidden" name="month" value="{{ selected_month }}">
+
+                                        {% for category in user_categories %}
+                                        <button type="submit"
+                                                class="category-option"
+                                                name="category"
+                                                value="{{ category }}"
+                                                {% if category == transaction.category %}disabled{% endif %}>
+                                            {{ category }}{% if category == transaction.category %} ✓{% endif %}
+                                        </button>
+                                        {% endfor %}
+                                    </form>
+                                </div>
+                            </div>
+                        </td>
+
                         <td class="amount-column">
                             {{ "%.2f"|format(transaction.amount|float) }}
                         </td>
+
                         <td>
                             <span class="type-badge {% if transaction.type == 'income' %}income{% endif %}">
                                 {{ transaction.type }}
                             </span>
                         </td>
+
                         <td>
                             <div class="actions">
                                 <button type="button"
@@ -200,9 +418,7 @@
 
                                 <form method="post"
                                       action="{{ url_for('delete', id=transaction.id) }}">
-                                    <input type="hidden"
-                                           name="csrf_token"
-                                           value="{{ csrf_token() }}">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                     <button type="submit"
                                             class="button-danger button-small">
                                         Delete
@@ -269,6 +485,149 @@
                 transactionDialog.showModal();
             });
         });
+
+        const categoryPickers = [];
+
+        function closeCategoryPickers(except = null) {
+            categoryPickers.forEach((picker) => {
+                if (picker !== except) {
+                    picker.close();
+                }
+            });
+        }
+
+        document.querySelectorAll(".category-picker").forEach((element) => {
+            const trigger = element.querySelector(".category-trigger");
+            const options = element.querySelector(".category-options");
+            let closeTimer;
+
+            function close() {
+                clearTimeout(closeTimer);
+                options.hidden = true;
+                trigger.setAttribute("aria-expanded", "false");
+            }
+
+            const picker = { close };
+            categoryPickers.push(picker);
+
+            function open() {
+                clearTimeout(closeTimer);
+                closeCategoryPickers(picker);
+
+                options.hidden = false;
+                trigger.setAttribute("aria-expanded", "true");
+
+                const rect = trigger.getBoundingClientRect();
+                const gap = 4;
+                const margin = 8;
+
+                options.style.maxHeight = "260px";
+
+                const below = window.innerHeight - rect.bottom - gap - margin;
+                const above = rect.top - gap - margin;
+                const useBelow =
+                    below >= Math.min(options.scrollHeight, 260) ||
+                    below >= above;
+
+                const available = useBelow ? below : above;
+                options.style.maxHeight =
+                    `${Math.max(40, Math.min(260, available))}px`;
+
+                const left = Math.max(
+                    margin,
+                    Math.min(
+                        rect.left,
+                        window.innerWidth - options.offsetWidth - margin
+                    )
+                );
+
+                const top = useBelow
+                    ? rect.bottom + gap
+                    : Math.max(margin, rect.top - options.offsetHeight - gap);
+
+                options.style.left = `${left}px`;
+                options.style.top = `${top}px`;
+            }
+
+            function scheduleClose() {
+                clearTimeout(closeTimer);
+                closeTimer = setTimeout(() => {
+                    if (!element.contains(document.activeElement)) {
+                        close();
+                    }
+                }, 180);
+            }
+
+            element.addEventListener("pointerenter", (event) => {
+                if (event.pointerType === "mouse") {
+                    open();
+                }
+            });
+
+            element.addEventListener("pointerleave", scheduleClose);
+
+            options.addEventListener("pointerenter", () => {
+                clearTimeout(closeTimer);
+            });
+
+            options.addEventListener("pointerleave", scheduleClose);
+
+            trigger.addEventListener("click", () => {
+                if (options.hidden) {
+                    open();
+                } else {
+                    close();
+                }
+            });
+
+            trigger.addEventListener("keydown", (event) => {
+                if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    open();
+                    options.querySelector("button:not(:disabled)")?.focus();
+                }
+            });
+
+            element.addEventListener("keydown", (event) => {
+                if (event.key === "Escape") {
+                    event.preventDefault();
+                    close();
+                    trigger.focus();
+                }
+            });
+
+            element.addEventListener("focusout", () => {
+                setTimeout(() => {
+                    if (!element.contains(document.activeElement)) {
+                        close();
+                    }
+                }, 0);
+            });
+
+            options.querySelector("form").addEventListener("submit", (event) => {
+                if (event.currentTarget.dataset.saving === "true") {
+                    event.preventDefault();
+                    return;
+                }
+                event.currentTarget.dataset.saving = "true";
+                trigger.setAttribute("aria-busy", "true");
+            });
+        });
+
+        document.addEventListener("pointerdown", (event) => {
+            if (!event.target.closest(".category-picker")) {
+                closeCategoryPickers();
+            }
+        });
+
+        window.addEventListener("resize", () => closeCategoryPickers());
+
+        window.addEventListener("scroll", (event) => {
+            if (!(event.target instanceof Element) ||
+                !event.target.closest(".category-options")) {
+                closeCategoryPickers();
+            }
+        }, true);
     </script>
 </body>
 </html>
