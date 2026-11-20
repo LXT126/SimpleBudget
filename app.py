@@ -609,6 +609,84 @@ def edit(id):
     ), 400 if errors else 200
 
 
+@app.route("/recategorise/<int:id>", methods=("GET", "POST"))
+@user_required
+def recategorise(id):
+    conn = get_db()
+
+    transaction = conn.execute(
+        """SELECT * FROM account_transactions
+           WHERE id = ? AND user_id = ?""",
+        (id, g.user["id"]),
+    ).fetchone()
+
+    if transaction is None:
+        abort(404, description="Transaction not found.")
+
+    selected_month = (
+        request.form.get("month", transaction["date"][:7])
+        if request.method == "POST"
+        else request.args.get("month", transaction["date"][:7])
+    )
+
+    if not validate_month(selected_month):
+        abort(400, description="Invalid month. Use YYYY-MM.")
+
+    categories = get_user_categories(conn, g.user["id"])
+    selected_category = transaction["category"]
+    error = None
+    status = 200
+
+    if request.method == "POST":
+        selected_category = request.form.get("category", "")
+        category = selected_category.strip()
+
+        if not category:
+            error = "Choose a category."
+            status = 400
+
+        elif category not in categories:
+            error = "Choose a category available in your account."
+            status = 400
+
+        else:
+            try:
+                with conn:
+                    cursor = conn.execute(
+                        """UPDATE account_transactions
+                           SET category = ?
+                           WHERE id = ? AND user_id = ?""",
+                        (category, id, g.user["id"]),
+                    )
+
+                    if cursor.rowcount != 1:
+                        abort(404, description="Transaction not found.")
+
+            except sqlite3.Error:
+                error = (
+                    "Category could not be updated. Please try again."
+                )
+                status = 503
+
+            else:
+                return redirect(
+                    url_for(
+                        "index",
+                        month=selected_month,
+                        _anchor="transactions-heading",
+                    )
+                )
+
+    return render_template(
+        "recategorise.html",
+        transaction=transaction,
+        selected_month=selected_month,
+        selected_category=selected_category,
+        categories=categories,
+        error=error,
+    ), status
+
+
 @app.post("/delete/<int:id>")
 @user_required
 def delete(id):
