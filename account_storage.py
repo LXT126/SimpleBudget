@@ -1,7 +1,15 @@
-import sqlite3
 from datetime import datetime, timezone
 
 from werkzeug.security import generate_password_hash
+
+
+DEFAULT_CATEGORIES = (
+    "Groceries",
+    "Utilities",
+    "Rent",
+    "Salary",
+    "Misc",
+)
 
 
 def init_account_tables(conn):
@@ -10,8 +18,7 @@ def init_account_tables(conn):
                id INTEGER PRIMARY KEY AUTOINCREMENT,
                username TEXT NOT NULL COLLATE NOCASE UNIQUE,
                password_hash TEXT NOT NULL,
-               role TEXT NOT NULL
-                   CHECK (role IN ('user', 'admin')),
+               role TEXT NOT NULL CHECK (role IN ('user', 'admin')),
                registered_at TEXT NOT NULL
            )"""
     )
@@ -23,8 +30,7 @@ def init_account_tables(conn):
                date TEXT NOT NULL,
                category TEXT NOT NULL,
                amount REAL NOT NULL,
-               type TEXT NOT NULL
-                   CHECK (type IN ('expense', 'income'))
+               type TEXT NOT NULL CHECK (type IN ('expense', 'income'))
            )"""
     )
 
@@ -43,6 +49,24 @@ def init_account_tables(conn):
                month TEXT NOT NULL,
                amount TEXT NOT NULL,
                PRIMARY KEY (user_id, month)
+           )"""
+    )
+
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS account_category_budgets (
+               user_id INTEGER NOT NULL REFERENCES users(id),
+               month TEXT NOT NULL,
+               category TEXT NOT NULL,
+               amount TEXT NOT NULL,
+               PRIMARY KEY (user_id, month, category)
+           )"""
+    )
+
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS account_categories (
+               user_id INTEGER NOT NULL REFERENCES users(id),
+               name TEXT NOT NULL COLLATE NOCASE,
+               PRIMARY KEY (user_id, name)
            )"""
     )
 
@@ -98,17 +122,61 @@ def create_user(conn, username, password, role="user"):
             """INSERT INTO users
                (username, password_hash, role, registered_at)
                VALUES (?, ?, ?, ?)""",
-            (username, password_hash, role, registered_at)
+            (username, password_hash, role, registered_at),
         )
 
     return cursor.lastrowid
+
+
+def get_user_categories(conn, user_id):
+    """Return default categories and this user's own categories."""
+    names = set(DEFAULT_CATEGORIES)
+
+    for query in (
+        "SELECT name FROM account_categories WHERE user_id = ?",
+        "SELECT DISTINCT category FROM account_transactions WHERE user_id = ?",
+        "SELECT DISTINCT category FROM account_category_budgets WHERE user_id = ?",
+    ):
+        names.update(
+            row[0]
+            for row in conn.execute(query, (user_id,))
+        )
+
+    return sorted(names, key=str.casefold)
+
+
+def add_user_category(conn, user_id, value):
+    name = value.strip()
+
+    if not name:
+        raise ValueError("Enter a category name.")
+
+    if len(name) > 80:
+        raise ValueError(
+            "Category names must contain at most 80 characters."
+        )
+
+    if any(
+        name.casefold() == existing.casefold()
+        for existing in get_user_categories(conn, user_id)
+    ):
+        raise ValueError("This category already exists.")
+
+    with conn:
+        conn.execute(
+            """INSERT INTO account_categories (user_id, name)
+               VALUES (?, ?)""",
+            (user_id, name),
+        )
+
+    return name
 
 
 def import_legacy_data(conn, owner_id):
     """Import the original data once into a chosen regular account."""
     owner = conn.execute(
         "SELECT id, role FROM users WHERE id = ?",
-        (owner_id,)
+        (owner_id,),
     ).fetchone()
 
     if owner is None or owner["role"] != "user":
@@ -130,7 +198,6 @@ def import_legacy_data(conn, owner_id):
                 )
             return False
 
-        # Refuse to combine legacy data with an already-used account.
         for table in (
             "account_transactions",
             "account_monthly_budgets",
@@ -138,7 +205,7 @@ def import_legacy_data(conn, owner_id):
         ):
             row = conn.execute(
                 f"SELECT 1 FROM {table} WHERE user_id = ? LIMIT 1",
-                (owner_id,)
+                (owner_id,),
             ).fetchone()
 
             if row is not None:
@@ -153,21 +220,21 @@ def import_legacy_data(conn, owner_id):
                SELECT ?, date, category, amount, type
                FROM transactions
                ORDER BY id""",
-            (owner_id,)
+            (owner_id,),
         )
 
         conn.execute(
             """INSERT INTO account_monthly_budgets
                (user_id, month, amount)
                SELECT ?, month, amount FROM monthly_budgets""",
-            (owner_id,)
+            (owner_id,),
         )
 
         conn.execute(
             """INSERT INTO account_budget_defaults
                (user_id, month, amount)
                SELECT ?, month, amount FROM monthly_budget_defaults""",
-            (owner_id,)
+            (owner_id,),
         )
 
         conn.execute(
@@ -179,7 +246,7 @@ def import_legacy_data(conn, owner_id):
                 datetime.now(timezone.utc).isoformat(
                     timespec="seconds"
                 ),
-            )
+            ),
         )
 
     return True
