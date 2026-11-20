@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Category budgets — SimpleBudget</title>
+
+    <link rel="stylesheet"
+          href="{{ url_for('static', filename='style.css') }}">
+
+    <style>
+        .category-budget-form {
+            display: flex;
+            align-items: end;
+            gap: 20px;
+            padding: 26px;
+            flex-wrap: wrap;
+        }
+
+        .category-budget-form label {
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        .category-budget-form input,
+        .category-budget-form select {
+            min-height: 44px;
+        }
+
+        .category-budget-note {
+            margin: 16px 0 26px;
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+    {% include 'account_header.html' %}
+
+    <main class="container">
+        <div class="page-heading">
+            <div>
+                <h1>Category budgets</h1>
+                <p class="subtitle">
+                    Set or update category budgets for a selected month.
+                </p>
+            </div>
+
+            <a class="button button-secondary"
+               href="{{ url_for('index', month=values.month) if valid_month else url_for('index') }}">
+                Back to Home
+            </a>
+        </div>
+
+        <section class="panel filter-panel">
+            <form class="inline-form"
+                  method="get"
+                  action="{{ url_for('category_budgets') }}">
+                <label for="filter-month">Month:</label>
+
+                <input id="filter-month"
+                       type="month"
+                       name="month"
+                       min="0001-01"
+                       max="9999-12"
+                       value="{{ values.month if valid_month else '' }}"
+                       required>
+
+                <button type="submit">Show budgets</button>
+            </form>
+        </section>
+
+        <p class="category-budget-note">
+            Category budgets apply only to the selected month.
+            They do not change your overall monthly budget.
+        </p>
+
+        {% if error %}
+        <p class="alert" role="alert">{{ error }}</p>
+        {% endif %}
+
+        {% if valid_month %}
+        <section class="panel">
+            <form class="category-budget-form"
+                  method="post"
+                  action="{{ url_for('category_budgets') }}">
+                <input type="hidden"
+                       name="csrf_token"
+                       value="{{ csrf_token() }}">
+
+                <input type="hidden"
+                       name="month"
+                       value="{{ values.month }}">
+
+                <div>
+                    <label for="budget-category">Category</label>
+
+                    <select id="budget-category"
+                            name="category"
+                            required>
+                        <option value="">Choose a category</option>
+
+                        {% if values.category and values.category not in categories %}
+                        <option value="{{ values.category }}" selected>
+                            {{ values.category }}
+                        </option>
+                        {% endif %}
+
+                        {% for category in categories %}
+                        <option value="{{ category }}"
+                                {% if values.category == category %}selected{% endif %}>
+                            {{ category }}
+                        </option>
+                        {% endfor %}
+                    </select>
+
+                    <button type="button"
+                            class="button-secondary button-small"
+                            style="margin-top:12px;"
+                            data-add-category
+                            data-category-target="budget-category">
+                        + Add category
+                    </button>
+                </div>
+
+                <div>
+                    <label for="category-amount">Budget (CNY)</label>
+
+                    <input id="category-amount"
+                           name="amount"
+                           type="text"
+                           inputmode="decimal"
+                           value="{{ values.amount }}"
+                           placeholder="0.00"
+                           required
+                           aria-describedby="amount-help">
+                </div>
+
+                <button type="submit">
+                    Save category budget
+                </button>
+
+                <p id="amount-help"
+                   class="muted"
+                   style="width:100%; margin:0;">
+                    Zero or greater, with at most two decimal places.
+                    Saving an existing category updates its budget.
+                </p>
+            </form>
+        </section>
+
+        <section class="panel table-panel" style="margin-top:26px;">
+            <div class="section-heading table-heading">
+                <h2>Category budgets — {{ values.month }}</h2>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">Category</th>
+                        <th scope="col">Budget (CNY)</th>
+                        <th scope="col">Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {% for category in categories %}
+                    <tr>
+                        <td>{{ category }}</td>
+
+                        <td>
+                            {% if category in saved %}
+                            CNY {{ saved[category] }}
+                            {% else %}
+                            Not set
+                            {% endif %}
+                        </td>
+
+                        <td>
+                            <button type="button"
+                                    class="button-secondary button-small edit-category"
+                                    data-category="{{ category }}"
+                                    data-amount="{{ saved.get(category, '') }}">
+                                Edit
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+        {% endif %}
+    </main>
+
+    <script>
+        document.querySelectorAll(".edit-category").forEach((button) => {
+            button.addEventListener("click", () => {
+                const select =
+                    document.getElementById("budget-category");
+
+                if (![...select.options].some(
+                    option => option.value === button.dataset.category
+                )) {
+                    select.add(
+                        new Option(
+                            button.dataset.category,
+                            button.dataset.category
+                        )
+                    );
+                }
+
+                select.value = button.dataset.category;
+
+                const amount =
+                    document.getElementById("category-amount");
+
+                amount.value = button.dataset.amount;
+                amount.focus();
+            });
+        });
+    </script>
+
+    {% include 'category_creator.html' %}
+</body>
+</html>

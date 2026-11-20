@@ -274,3 +274,60 @@ python -m unittest discover -s tests -v
 
 All 64 tests passed on Windows with Python 3.13.
 Tests use temporary databases without modifying finance.db.
+
+## Monthly category budgets (B5, issue #15)
+
+Regular users can open **Manage category budgets** from the selected
+month's dashboard.
+
+Select a category or enter a custom category, enter a non-negative
+CNY amount with at most two decimal places, and save.
+
+**Edit** loads an existing category into the form. Saving updates that
+entry without creating duplicates. Zero is a configured budget;
+**Not set** means there is no entry.
+
+Category budgets are stored separately for each user, month and category
+in `account_category_budgets`. They apply only to the selected month
+and do not inherit forward or change the overall monthly budget.
+
+Existing databases gain the new table automatically when the application
+opens a database connection. No manual migration command is required.
+
+Saving requires a regular user session and a valid CSRF token.
+Validation errors preserve submitted values and existing saved budgets.
+
+Spending summaries and overspending alerts by category are outside B5
+and will be delivered in B6.
+
+Run all tests from the project root:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+B5 adds 14 automated tests covering updates, month/category separation,
+user isolation, zero/unset, no inheritance, invalid input, access control,
+CSRF, unchanged overall budgets and database failure handling.
+
+### User-defined categories
+
+Category selection uses a standard dropdown.
+
+Regular users can select **Add category** on the category budget,
+Add Transaction, or Edit Transaction page. New categories are saved
+to the current user's account and become available across these pages.
+
+Creating a category does not create a budget or transaction.
+Previously entered transaction fields are preserved while adding a category.
+
+Category names are trimmed, must contain 1 to 80 characters, and cannot
+duplicate an existing category in the same account, ignoring letter case.
+Different users may independently create categories with the same name.
+
+Custom categories are stored in `account_categories` and are isolated
+by user ID. Creating them requires authentication and a valid CSRF token.
+
+Ten additional automated tests cover persistence, availability in
+transaction forms, validation, duplicate names, user isolation,
+ownership checks, access control, CSRF, and HTML escaping.

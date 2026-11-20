@@ -129,6 +129,26 @@
             </p>
             {% endif %}
         </section>
+
+        <section class="panel"
+                 style="padding:24px; margin:24px 0;"
+                 aria-labelledby="category-budgets-heading">
+            <div class="section-heading" style="margin:0;">
+                <div>
+                    <h2 id="category-budgets-heading">
+                        Category budgets — {{ selected_month }}
+                    </h2>
+                    <p class="muted">
+                        Set a separate budget for each category this month.
+                    </p>
+                </div>
+
+                <a class="button button-secondary"
+                   href="{{ url_for('category_budgets', month=selected_month) }}">
+                    Manage category budgets
+                </a>
+            </div>
+        </section>
         {% endif %}
 
         <section class="panel table-panel"
@@ -257,7 +277,8 @@
     </dialog>
 
     <script>
-        const transactionDialog = document.getElementById("transaction-dialog");
+        const transactionDialog =
+            document.getElementById("transaction-dialog");
 
         document.querySelectorAll(".view-transaction").forEach((button) => {
             button.addEventListener("click", () => {

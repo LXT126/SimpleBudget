@@ -1,0 +1,128 @@
+<dialog id="category-creator"
+        aria-labelledby="category-creator-title">
+    <h2 id="category-creator-title">Add category</h2>
+
+    <p class="muted">
+        This category will be available only in your account.
+    </p>
+
+    <form id="category-creator-form"
+          action="{{ url_for('create_category') }}"
+          method="post"
+          style="display:flex; flex-direction:column; gap:16px; margin-top:20px;">
+        <input type="hidden"
+               name="csrf_token"
+               value="{{ csrf_token() }}">
+
+        <label for="new-category-name">Category name</label>
+
+        <input id="new-category-name"
+               name="name"
+               maxlength="80"
+               required
+               autocomplete="off">
+
+        <p id="category-creator-error"
+           class="alert"
+           role="alert"
+           hidden></p>
+
+        <div style="display:flex; gap:12px;">
+            <button id="category-creator-save"
+                    type="submit">
+                Add category
+            </button>
+
+            <button id="category-creator-cancel"
+                    type="button"
+                    class="button-secondary">
+                Cancel
+            </button>
+        </div>
+    </form>
+</dialog>
+
+<script>
+(() => {
+    const dialog =
+        document.getElementById("category-creator");
+
+    const form =
+        document.getElementById("category-creator-form");
+
+    const error =
+        document.getElementById("category-creator-error");
+
+    const save =
+        document.getElementById("category-creator-save");
+
+    let target;
+
+    document.querySelectorAll("[data-add-category]").forEach(button => {
+        button.addEventListener("click", () => {
+            target = document.getElementById(
+                button.dataset.categoryTarget
+            );
+
+            form.reset();
+            error.hidden = true;
+
+            dialog.showModal();
+
+            document.getElementById("new-category-name").focus();
+        });
+    });
+
+    document.getElementById("category-creator-cancel")
+        .addEventListener("click", () => {
+            dialog.close();
+        });
+
+    form.addEventListener("submit", async event => {
+        event.preventDefault();
+
+        save.disabled = true;
+        error.hidden = true;
+
+        try {
+            const response = await fetch(form.action, {
+                method: "POST",
+                body: new FormData(form),
+                credentials: "same-origin",
+                headers: {
+                    "Accept": "application/json"
+                }
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    data.error || "Category could not be saved."
+                );
+            }
+
+            if (![...target.options].some(
+                option => option.value === data.name
+            )) {
+                target.add(
+                    new Option(data.name, data.name)
+                );
+            }
+
+            target.value = data.name;
+
+            dialog.close();
+            target.focus();
+        } catch (failure) {
+            error.textContent = failure instanceof SyntaxError
+                ? "Please reload the page and sign in again if needed."
+                : failure.message;
+
+            error.hidden = false;
+        } finally {
+            save.disabled = false;
+        }
+    });
+})();
+</script>
