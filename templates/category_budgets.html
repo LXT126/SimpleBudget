@@ -70,7 +70,8 @@
 
         <p class="category-budget-note">
             Category budgets apply only to the selected month.
-            They do not change your overall monthly budget.
+            Their combined amount may exceed your overall monthly budget.
+            Category and overall monthly alerts are calculated independently.
         </p>
 
         {% if error %}
@@ -134,9 +135,7 @@
                            aria-describedby="amount-help">
                 </div>
 
-                <button type="submit">
-                    Save category budget
-                </button>
+                <button type="submit">Save category budget</button>
 
                 <p id="amount-help"
                    class="muted"
@@ -147,46 +146,9 @@
             </form>
         </section>
 
-        <section class="panel table-panel" style="margin-top:26px;">
-            <div class="section-heading table-heading">
-                <h2>Category budgets — {{ values.month }}</h2>
-            </div>
-
-            <table>
-                <thead>
-                    <tr>
-                        <th scope="col">Category</th>
-                        <th scope="col">Budget (CNY)</th>
-                        <th scope="col">Actions</th>
-                    </tr>
-                </thead>
-
-                <tbody>
-                    {% for category in categories %}
-                    <tr>
-                        <td>{{ category }}</td>
-
-                        <td>
-                            {% if category in saved %}
-                            CNY {{ saved[category] }}
-                            {% else %}
-                            Not set
-                            {% endif %}
-                        </td>
-
-                        <td>
-                            <button type="button"
-                                    class="button-secondary button-small edit-category"
-                                    data-category="{{ category }}"
-                                    data-amount="{{ saved.get(category, '') }}">
-                                Edit
-                            </button>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </section>
+        {% with report_month=values.month, allow_budget_edit=true %}
+            {% include 'category_summary.html' %}
+        {% endwith %}
         {% endif %}
     </main>
 

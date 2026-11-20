@@ -331,3 +331,57 @@ by user ID. Creating them requires authentication and a valid CSRF token.
 Ten additional automated tests cover persistence, availability in
 transaction forms, validation, duplicate names, user isolation,
 ownership checks, access control, CSRF, and HTML escaping.
+
+## Category spending summaries and alerts (B6, issue #17)
+
+The dashboard and category budget page show category budgets,
+expenses, remaining amounts, and status for the selected month.
+
+Only expense transactions contribute to category spending.
+Income does not reduce category expenses.
+
+Remaining category budget is calculated as:
+
+category budget - category expenses
+
+Amounts use CNY with two decimal places. Negative remaining amounts
+trigger a category overspending alert. Spending exactly the budget
+is shown as "At budget" without an overspending alert.
+
+An unset budget is shown as "Not set", with remaining budget
+"Not available". A zero budget is a valid configured limit.
+
+Category budgets are independent of the overall monthly budget.
+Their combined amount may exceed it, and category and overall
+monthly alerts are calculated independently. Unused budget in one
+category does not offset overspending in another category.
+
+Summaries include the current user's default, custom, and previously
+used categories. Queries are scoped to the current user and selected
+month. Category budgets do not automatically inherit between months.
+
+Saved additions, edits, and deletions of transactions are reflected
+when the summary page reloads.
+
+B6 adds 20 tests covering calculations, boundary cases, user/month
+isolation, independent budget limits, page rendering, access control,
+and updates after transaction changes.
+
+Run the full suite from the project root:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+The category summary includes default categories, explicitly created
+personal categories, and categories present in the selected month's
+transactions or category budgets. Category names found only in other
+months' records are not included in that month's summary.
+
+### Code organisation
+
+Business modules are grouped in the `finance` package.
+`app.py` remains the application entry point at the project root.
+
+Run the application with `python app.py`.
+Run tests with `python -m unittest discover -s tests -v`.

@@ -20,16 +20,17 @@ from flask import (
 )
 from werkzeug.security import check_password_hash
 
-from account_storage import (
+from finance.account_storage import (
     add_user_category,
     create_user,
     get_user_categories,
     import_legacy_data,
     init_account_tables,
 )
-from monthly_budget import validate_budget, validate_month
-from monthly_summary import calculate_monthly_summary
-from transaction_validation import validate_transaction
+from finance.category_summary import read_category_summary
+from finance.monthly_budget import validate_budget, validate_month
+from finance.monthly_summary import calculate_monthly_summary
+from finance.transaction_validation import validate_transaction
 
 
 app = Flask(__name__)
@@ -116,8 +117,7 @@ def load_user_and_check_form():
         supplied = request.form.get("csrf_token", "")
 
         if not expected or not secrets.compare_digest(
-            expected,
-            supplied,
+            expected, supplied
         ):
             abort(
                 400,
@@ -149,13 +149,35 @@ def user_required(view):
 
 @app.context_processor
 def provide_user_categories():
-    return {
-        "user_categories": (
-            get_user_categories(get_db(), g.user["id"])
-            if g.user is not None and g.user["role"] == "user"
-            else []
-        )
+    context = {
+        "user_categories": [],
+        "category_rows": [],
     }
+
+    if g.user is None or g.user["role"] != "user":
+        return context
+
+    conn = get_db()
+
+    context["user_categories"] = get_user_categories(
+        conn, g.user["id"]
+    )
+
+    if request.endpoint in ("index", "category_budgets"):
+        month = (
+            request.form.get("month", "")
+            if request.method == "POST"
+            else request.args.get(
+                "month", date.today().strftime("%Y-%m")
+            )
+        )
+
+        if validate_month(month):
+            context["category_rows"] = read_category_summary(
+                conn, g.user["id"], month
+            )
+
+    return context
 
 
 def read_budget(conn, user_id, month):
@@ -173,10 +195,7 @@ def read_budget(conn, user_id, month):
             (user_id, month),
         ).fetchone()
 
-    if row is None:
-        return None
-
-    return Decimal(row["amount"])
+    return None if row is None else Decimal(row["amount"])
 
 
 def save_budget(conn, user_id, month, value):
@@ -221,10 +240,7 @@ def register():
         else:
             try:
                 create_user(
-                    get_db(),
-                    username,
-                    password,
-                    role="user",
+                    get_db(), username, password, role="user"
                 )
             except ValueError as exc:
                 error = str(exc)
@@ -259,8 +275,7 @@ def login():
         ).fetchone()
 
         if user is None or not check_password_hash(
-            user["password_hash"],
-            password,
+            user["password_hash"], password
         ):
             error = "Invalid username or password."
             status = 400
@@ -304,12 +319,8 @@ def admin():
     return render_template(
         "admin.html",
         users=users,
-        regular_count=sum(
-            user["role"] == "user" for user in users
-        ),
-        admin_count=sum(
-            user["role"] == "admin" for user in users
-        ),
+        regular_count=sum(user["role"] == "user" for user in users),
+        admin_count=sum(user["role"] == "admin" for user in users),
     )
 
 
@@ -320,8 +331,7 @@ def index():
         request.form.get("month", "")
         if request.method == "POST"
         else request.args.get(
-            "month",
-            date.today().strftime("%Y-%m"),
+            "month", date.today().strftime("%Y-%m")
         )
     )
 
@@ -343,9 +353,7 @@ def index():
         ).fetchall()
 
         monthly_budget = read_budget(
-            conn,
-            user_id,
-            selected_month,
+            conn, user_id, selected_month
         )
 
         if request.method == "POST":
@@ -377,8 +385,7 @@ def index():
         status = 400
 
     summary = calculate_monthly_summary(
-        transactions,
-        monthly_budget,
+        transactions, monthly_budget
     )
 
     return render_template(
@@ -404,8 +411,7 @@ def category_budgets():
             request.form.get("month", "")
             if request.method == "POST"
             else request.args.get(
-                "month",
-                date.today().strftime("%Y-%m"),
+                "month", date.today().strftime("%Y-%m")
             )
         ),
         "category": request.form.get("category", ""),
@@ -479,10 +485,7 @@ def category_budgets():
             ).fetchall()
         )
 
-    categories = get_user_categories(
-        conn,
-        g.user["id"],
-    )
+    categories = get_user_categories(conn, g.user["id"])
 
     return render_template(
         "category_budgets.html",
@@ -505,12 +508,8 @@ def create_category():
         )
     except ValueError as exc:
         return jsonify(error=str(exc)), 400
-
     except sqlite3.IntegrityError:
-        return jsonify(
-            error="This category already exists."
-        ), 400
-
+        return jsonify(error="This category already exists."), 400
     except sqlite3.Error:
         return jsonify(
             error="Category could not be saved. Please try again."
@@ -528,13 +527,10 @@ def add():
         "amount": "",
         "type": "expense",
     }
-
     errors = {}
 
     if request.method == "POST":
-        values, cleaned, errors = validate_transaction(
-            request.form
-        )
+        values, cleaned, errors = validate_transaction(request.form)
 
         if not errors:
             conn = get_db()
@@ -558,9 +554,7 @@ def add():
             )
 
     return render_template(
-        "add.html",
-        values=values,
-        errors=errors,
+        "add.html", values=values, errors=errors
     ), 400 if errors else 200
 
 
@@ -582,13 +576,10 @@ def edit(id):
         field: str(transaction[field])
         for field in ("date", "category", "amount", "type")
     }
-
     errors = {}
 
     if request.method == "POST":
-        values, cleaned, errors = validate_transaction(
-            request.form
-        )
+        values, cleaned, errors = validate_transaction(request.form)
 
         if not errors:
             with conn:

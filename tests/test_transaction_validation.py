@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import app as application
-from transaction_validation import validate_transaction
+from finance.transaction_validation import validate_transaction
 
 
 class TransactionValidationTests(AccountTestCase):

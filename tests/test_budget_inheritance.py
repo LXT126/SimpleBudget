@@ -4,7 +4,7 @@ import unittest
 from datetime import date
 from unittest.mock import patch
 
-from account_storage import init_account_tables, import_legacy_data
+from finance.account_storage import init_account_tables, import_legacy_data
 import app as application
 
 
