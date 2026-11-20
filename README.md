@@ -419,3 +419,23 @@ Run all tests from the project root:
 ```powershell
 python -m unittest discover -s tests -v
 ```
+
+## Combined month and category filtering
+
+Use the Month control and the Category selector beside Transactions
+to filter transactions together. Changing the category applies the
+filter automatically. All categories is selected by default.
+
+- Filters apply only to the current user's transaction list.
+- Monthly budget figures and category summaries always represent
+  the full selected month.
+- Filter selections are retained after saving the monthly budget
+  or changing a transaction's category.
+- A recategorised transaction disappears from the filtered list
+  if it no longer matches the selected category.
+- Private categories remain isolated between accounts.
+- An empty result displays a message and an All categories link.
+
+Twelve automated tests cover combined filtering, month and year
+boundaries, account isolation, custom categories, empty results,
+unchanged monthly summaries, and filter retention.
