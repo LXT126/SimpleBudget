@@ -324,6 +324,21 @@ def admin():
     )
 
 
+def selected_transaction_filter():
+    if request.method == "POST":
+        return request.form.get("filter_category", "")
+    return request.args.get("category", "")
+
+
+def transaction_list_url(month, category="", anchor=None):
+    values = {"month": month}
+    if category:
+        values["category"] = category
+    if anchor:
+        values["_anchor"] = anchor
+    return url_for("index", **values)
+
+
 @app.route("/", methods=("GET", "POST"))
 @user_required
 def index():
@@ -335,6 +350,8 @@ def index():
         )
     )
 
+    selected_filter = selected_transaction_filter()
+    filter_categories = get_user_categories(get_db(), g.user["id"])
     error = None
     budget_error = None
     monthly_budget = None
@@ -356,7 +373,11 @@ def index():
             conn, user_id, selected_month
         )
 
-        if request.method == "POST":
+        if selected_filter and selected_filter not in filter_categories:
+            error = "Choose a category available in your account."
+            status = 400
+
+        if request.method == "POST" and not error:
             try:
                 save_budget(
                     conn,
@@ -374,7 +395,7 @@ def index():
                 status = 503
             else:
                 return redirect(
-                    url_for("index", month=selected_month)
+                    transaction_list_url(selected_month, selected_filter)
                 )
     else:
         error = (
@@ -388,9 +409,20 @@ def index():
         transactions, monthly_budget
     )
 
+    # Calculate the summary before filtering the transaction list.
+    if error:
+        transactions = []
+    elif selected_filter:
+        transactions = [
+            row for row in transactions
+            if row["category"] == selected_filter
+        ]
+
     return render_template(
         "index.html",
         transactions=transactions,
+        selected_filter=selected_filter,
+        filter_categories=filter_categories,
         selected_month=selected_month,
         error=error,
         budget_error=budget_error,
@@ -633,6 +665,14 @@ def recategorise(id):
         abort(400, description="Invalid month. Use YYYY-MM.")
 
     categories = get_user_categories(conn, g.user["id"])
+    selected_filter = (
+        request.form.get("filter_category", "")
+        if request.method == "POST"
+        else request.args.get("filter_category", "")
+    )
+    if selected_filter and selected_filter not in categories:
+        abort(400, description="Choose a category available in your account.")
+
     selected_category = transaction["category"]
     error = None
     status = 200
@@ -670,10 +710,10 @@ def recategorise(id):
 
             else:
                 return redirect(
-                    url_for(
-                        "index",
-                        month=selected_month,
-                        _anchor="transactions-heading",
+                    transaction_list_url(
+                        selected_month,
+                        selected_filter,
+                        anchor="transactions-heading",
                     )
                 )
 
@@ -681,6 +721,7 @@ def recategorise(id):
         "recategorise.html",
         transaction=transaction,
         selected_month=selected_month,
+        selected_filter=selected_filter,
         selected_category=selected_category,
         categories=categories,
         error=error,

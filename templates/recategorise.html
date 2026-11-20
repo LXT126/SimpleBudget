@@ -56,6 +56,7 @@
 
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="month" value="{{ selected_month }}">
+            <input type="hidden" name="filter_category" value="{{ selected_filter }}">
 
             <label for="recategorise-category">Category</label>
 
@@ -88,7 +89,7 @@
             <div class="form-actions" style="padding:0; margin-top:6px;">
                 <button type="submit">Save category</button>
                 <a class="button button-secondary"
-                   href="{{ url_for('index', month=selected_month, _anchor='transactions-heading') }}">
+                   href="{{ url_for('index', month=selected_month, _anchor='transactions-heading', **({'category': selected_filter} if selected_filter else {})) }}">
                     Cancel
                 </a>
             </div>

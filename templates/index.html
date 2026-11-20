@@ -7,6 +7,7 @@
           href="{{ url_for('static', filename='style.css') }}">
 
     <style>
+        .filter-panel .inline-form { flex-wrap: wrap; gap: 12px; }
         .category-picker {
             display: inline-block;
         }
@@ -195,6 +196,57 @@ section[aria-labelledby="transactions-heading"] .actions .button-small {
 /* transactions-layout-end */
 
     </style>
+
+<style>
+    .transactions-title-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+        margin-bottom: 6px;
+    }
+
+    .transactions-title-row h2 {
+        margin: 0 !important;
+    }
+
+    .transaction-category-filter {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+    }
+
+    .transaction-category-filter .transaction-filter-label {
+        margin: 0;
+        font-size: 13px;
+        font-weight: 500;
+        color: #64748b;
+    }
+
+    .transaction-category-filter select {
+        box-sizing: border-box;
+        width: 180px;
+        min-width: 0;
+        max-width: 240px;
+        height: 38px;
+        margin: 0;
+        padding: 6px 30px 6px 12px;
+        border: 1px solid #cbd5e1;
+        border-radius: 8px;
+        background-color: #fff;
+        color: #193052;
+        font: inherit;
+        font-size: 14px;
+        cursor: pointer;
+    }
+
+    .transaction-category-filter select:focus {
+        outline: 2px solid #93b4ff;
+        outline-offset: 2px;
+    }
+</style>
+
 </head>
 <body>
     {% include 'account_header.html' %}
@@ -209,7 +261,7 @@ section[aria-labelledby="transactions-heading"] .actions .button-small {
             </div>
         </div>
 
-        <section class="panel filter-panel" aria-label="Select a month">
+        <section class="panel filter-panel" aria-label="Filter transactions">
             <form class="inline-form"
                   method="get"
                   action="{{ url_for('index') }}">
@@ -221,6 +273,7 @@ section[aria-labelledby="transactions-heading"] .actions .button-small {
                        min="0001-01"
                        max="9999-12"
                        required>
+                <input type="hidden" name="category" value="{{ selected_filter }}">
                 <button type="submit">Show transactions</button>
             </form>
         </section>
@@ -257,6 +310,7 @@ section[aria-labelledby="transactions-heading"] .actions .button-small {
                         <form method="post" action="{{ url_for('index') }}">
                             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                             <input type="hidden" name="month" value="{{ selected_month }}">
+                            <input type="hidden" name="filter_category" value="{{ selected_filter }}">
 
                             <label for="budget">Budget (CNY):</label>
                             <input type="number"
@@ -316,10 +370,36 @@ section[aria-labelledby="transactions-heading"] .actions .button-small {
                  aria-labelledby="transactions-heading">
             <div class="section-heading table-heading">
                 <div>
-                    <h2 id="transactions-heading">Transactions</h2>
+                    <div class="transactions-title-row">
+                        <h2 id="transactions-heading">Transactions</h2>
+
+                        {% if selected_month %}
+                        <form class="transaction-category-filter"
+                              method="get"
+                              action="{{ url_for('index') }}#transactions-heading">
+                            <input type="hidden" name="month" value="{{ selected_month }}">
+
+                            <label class="transaction-filter-label"
+                                   for="category-filter">Category</label>
+
+                            <select id="category-filter"
+                                    name="category"
+                                    onchange="this.form.requestSubmit()">
+                                <option value="">All categories</option>
+                                {% for category in filter_categories %}
+                                <option value="{{ category }}" {% if category == selected_filter %}selected{% endif %}>{{ category }}</option>
+                                {% endfor %}
+                            </select>
+
+                            <noscript>
+                                <button type="submit">Filter</button>
+                            </noscript>
+                        </form>
+                        {% endif %}
+                    </div>
                     <p class="muted">
                         {% if selected_month %}
-                        Your income and expenses for {{ selected_month }}.
+                        Your income and expenses for {{ selected_month }}{% if selected_filter %} &middot; {{ selected_filter }}{% endif %}.
                         {% else %}
                         Select a valid month to view transactions.
                         {% endif %}
@@ -375,6 +455,7 @@ section[aria-labelledby="transactions-heading"] .actions .button-small {
                                           action="{{ url_for('recategorise', id=transaction.id) }}">
                                         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                         <input type="hidden" name="month" value="{{ selected_month }}">
+                            <input type="hidden" name="filter_category" value="{{ selected_filter }}">
 
                                         {% for category in user_categories %}
                                         <button type="submit"
@@ -433,7 +514,12 @@ section[aria-labelledby="transactions-heading"] .actions .button-small {
 
             {% elif selected_month and not error %}
             <div class="empty-state">
+                {% if selected_filter %}
+                <h3>No transactions for {{ selected_month }} in {{ selected_filter }}.</h3>
+                <p><a href="{{ url_for('index', month=selected_month) }}">All categories</a></p>
+                {% else %}
                 <h3>No transactions for {{ selected_month }}.</h3>
+                {% endif %}
                 <p>Use Add New Transaction to start tracking this month.</p>
             </div>
             {% endif %}
